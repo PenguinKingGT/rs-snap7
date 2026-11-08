@@ -409,3 +409,19 @@ pub fn parse_userdata(
         payload: d[4..].to_vec(),
     })
 }
+
+/// Encode a one-to-eight byte ASCII S7 session password using chained XOR.
+/// This is protocol obfuscation, not encryption; callers must protect the network.
+pub fn encode_password(password: &str) -> Result<[u8; 8]> {
+    if !password.is_ascii() || !(1..=8).contains(&password.len()) {
+        return Err(Error::InvalidInput(
+            "password requires one through eight ASCII characters",
+        ));
+    }
+    let mut encoded = [0; 8];
+    for index in 0..8 {
+        let byte = password.as_bytes().get(index).copied().unwrap_or(b' ');
+        encoded[index] = byte ^ 0x55 ^ if index >= 2 { encoded[index - 2] } else { 0 };
+    }
+    Ok(encoded)
+}
