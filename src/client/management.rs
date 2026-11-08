@@ -48,14 +48,10 @@ impl Client {
             // Validate before locking or touching the network.
             management::clock_write_request(0, value)?;
             let mut session = self.session()?;
-            let reply =
-                session.transact(|reference| management::clock_write_request(reference, value))?;
-            let ack = session.validate(protocol::parse_userdata(&reply, 7, 2, true))?;
-            if ack.more || !ack.payload.is_empty() {
-                return session
-                    .validate(Err(Error::Protocol("invalid clock write acknowledgement")));
-            }
-            Ok(())
+            session.transact_checked(
+                |reference| management::clock_write_request(reference, value),
+                |reply| protocol::check_userdata_ack(reply, 7, 2),
+            )
         })
     }
 
@@ -76,8 +72,9 @@ impl Client {
     /// Hold one exclusive session through request construction and service validation.
     fn control(&self, operation: Control) -> Result<()> {
         let mut session = self.session()?;
-        let reply =
-            session.transact(|reference| Ok(management::control_request(reference, operation)))?;
-        session.validate(management::check_control(&reply, operation))
+        session.transact_checked(
+            |reference| Ok(management::control_request(reference, operation)),
+            |reply| management::check_control(reply, operation),
+        )
     }
 }

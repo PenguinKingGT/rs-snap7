@@ -414,6 +414,18 @@ pub fn parse_userdata(
     })
 }
 
+/// Check a complete no-payload USERDATA acknowledgement for clock/password mutations.
+/// Refusals keep their PLC/authentication codes; continuation/payload violations are protocol errors.
+pub(crate) fn check_userdata_ack(response: &Pdu, group: u8, subfunction: u8) -> Result<()> {
+    let ack = parse_userdata(response, group, subfunction, true)?;
+    if ack.more || !ack.payload.is_empty() {
+        return Err(Error::Protocol(
+            "unexpected USERDATA acknowledgement payload",
+        ));
+    }
+    Ok(())
+}
+
 /// Encode a one-to-eight byte ASCII S7 session password using chained XOR.
 /// This is protocol obfuscation, not encryption; callers must protect the network.
 pub fn encode_password(password: &str) -> Result<[u8; 8]> {

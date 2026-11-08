@@ -1,7 +1,7 @@
 //! Session password operations; plaintext is never stored in client configuration.
 
 use super::Client;
-use crate::{Error, Result, protocol};
+use crate::{Result, protocol};
 
 impl Client {
     /// Unlock this session using a one-to-eight-character ASCII password.
@@ -21,14 +21,9 @@ impl Client {
     /// Validate both service identity and error layers on security acknowledgements.
     fn security(&self, subfunction: u8, payload: Option<&[u8]>) -> Result<()> {
         let mut session = self.session()?;
-        let response = session
-            .transact(|reference| protocol::userdata_request(reference, 5, subfunction, payload))?;
-        let reply = session.validate(protocol::parse_userdata(&response, 5, subfunction, true))?;
-        if reply.more || !reply.payload.is_empty() {
-            return session.validate(Err(Error::Protocol(
-                "unexpected security acknowledgement payload",
-            )));
-        }
-        Ok(())
+        session.transact_checked(
+            |reference| protocol::userdata_request(reference, 5, subfunction, payload),
+            |reply| protocol::check_userdata_ack(reply, 5, subfunction),
+        )
     }
 }

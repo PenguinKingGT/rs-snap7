@@ -247,3 +247,13 @@ a complete compact DB representation and publishes its data body, so full
 upload/download round trips preserve DB contents. The clients preserve the same
 PLC-driven wire exchange in both cases. Python/Rust cross-peer tests cover both
 behaviors without treating Python's memory storage model as physical PLC proof.
+
+## Mutation acknowledgement failures
+
+Control, clock-write and session-password operations classify the complete
+exchange and service acknowledgement together. Lost responses, wrong service
+identity, unexpected continuation or acknowledgement payloads return
+AmbiguousOperation with the original cause and invalidate malformed sessions.
+These operations are never automatically replayed. Explicit PLC/authentication
+refusals retain their codes; rate-limit, manual-disconnect and other pre-send
+rejections remain definite errors. Blocking and async clients share these rules.

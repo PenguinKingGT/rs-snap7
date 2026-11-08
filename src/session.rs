@@ -98,6 +98,25 @@ impl Session {
         self.transact_until(build, self.deadline())
     }
 
+    /// Classify a mutation only after its complete service acknowledgement is checked.
+    /// Already-classified exchange errors and definite peer refusals are preserved.
+    pub(crate) fn transact_checked<T>(
+        &mut self,
+        build: impl FnOnce(u16) -> Result<Pdu>,
+        check: impl FnOnce(&Pdu) -> Result<T>,
+    ) -> Result<T> {
+        let job = build(0)?;
+        let result = self
+            .transact(|reference| {
+                Ok(Pdu {
+                    reference,
+                    ..job.clone()
+                })
+            })
+            .and_then(|response| self.validate(check(&response)));
+        result.map_err(|error| crate::policy::mutation_failure(&job, error))
+    }
+
     /// Create a total operation deadline shared by every continuation exchange.
     pub(crate) fn deadline(&self) -> Instant {
         self.operation_deadline

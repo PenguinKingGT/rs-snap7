@@ -60,15 +60,12 @@ impl AsyncClient {
             // Validate before locking or touching the network.
             management::clock_write_request(0, value)?;
             let mut session = self.session().await;
-            let reply = session
-                .transact(|reference| management::clock_write_request(reference, value))
-                .await?;
-            let ack = session.validate(protocol::parse_userdata(&reply, 7, 2, true))?;
-            if ack.more || !ack.payload.is_empty() {
-                return session
-                    .validate(Err(Error::Protocol("invalid clock write acknowledgement")));
-            }
-            Ok(())
+            session
+                .transact_checked(
+                    |reference| management::clock_write_request(reference, value),
+                    |reply| protocol::check_userdata_ack(reply, 7, 2),
+                )
+                .await
         })
         .await
     }
@@ -92,9 +89,11 @@ impl AsyncClient {
     /// Hold one exclusive session through request construction and service validation.
     async fn control(&self, operation: Control) -> Result<()> {
         let mut session = self.session().await;
-        let reply = session
-            .transact(|reference| Ok(management::control_request(reference, operation)))
-            .await?;
-        session.validate(management::check_control(&reply, operation))
+        session
+            .transact_checked(
+                |reference| Ok(management::control_request(reference, operation)),
+                |reply| management::check_control(reply, operation),
+            )
+            .await
     }
 }

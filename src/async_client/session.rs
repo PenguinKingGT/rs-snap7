@@ -109,6 +109,26 @@ impl Session {
     pub(super) async fn transact(&mut self, build: impl FnOnce(u16) -> Result<Pdu>) -> Result<Pdu> {
         self.transact_until(build, self.deadline()).await
     }
+    /// Classify a mutation only after its complete service acknowledgement is checked.
+    /// Already-classified exchange errors and definite peer refusals are preserved.
+    pub(super) async fn transact_checked<T>(
+        &mut self,
+        build: impl FnOnce(u16) -> Result<Pdu>,
+        check: impl FnOnce(&Pdu) -> Result<T>,
+    ) -> Result<T> {
+        let job = build(0)?;
+        let result = self
+            .transact(|reference| {
+                Ok(Pdu {
+                    reference,
+                    ..job.clone()
+                })
+            })
+            .await
+            .and_then(|response| self.validate(check(&response)));
+        result.map_err(|error| crate::policy::mutation_failure(&job, error))
+    }
+
     /// Own the connection locally across awaits. If this future is dropped after
     /// transmission starts, the descriptor closes and the session remains disconnected.
     async fn exchange_until(
