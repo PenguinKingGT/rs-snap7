@@ -2,6 +2,7 @@
 //!
 //! See `docs/migration.md` for implemented capabilities and compatibility limits.
 
+pub mod codec;
 pub mod error;
 pub mod types;
 
