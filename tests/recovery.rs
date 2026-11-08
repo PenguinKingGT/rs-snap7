@@ -304,3 +304,112 @@ async fn async_batch_recovery_replans_merged_variables() {
     client.disconnect().await.unwrap();
     worker.join().unwrap();
 }
+
+/// Verify exact offsets and complete remaining-range replanning across a PDU shrink.
+fn shrinking_read_peer(
+    area: rs_snap7::Area,
+    successful_before_loss: usize,
+) -> (SocketAddr, JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = listener.local_addr().unwrap();
+    let worker = thread::spawn(move || {
+        let mut expected = 37usize;
+        let indexed = matches!(area, rs_snap7::Area::Timers | rs_snap7::Area::Counters);
+        let width = if indexed { 2 } else { 1 };
+        for (pdu, limit) in [(480u16, successful_before_loss), (128, usize::MAX)] {
+            let (mut stream, _) = listener.accept().unwrap();
+            handshake(&mut stream, pdu, false);
+            for completed in 0..=limit {
+                let raw = read_frame(&mut stream);
+                if raw[1] == 0x80 {
+                    assert_eq!(expected, 1037);
+                    return;
+                }
+                let job = Pdu::decode(&raw[3..]).unwrap();
+                let address = &job.parameters[2..];
+                let count = usize::from(u16::from_be_bytes([address[4], address[5]]));
+                let wire = u32::from_be_bytes([0, address[9], address[10], address[11]]) as usize;
+                let start = if indexed { wire } else { wire / 8 };
+                assert_eq!(address[8], area as u8);
+                assert_eq!(
+                    start, expected,
+                    "acknowledged data must not be reread or skipped"
+                );
+                assert!(count * width + 18 <= usize::from(pdu));
+                if completed == limit {
+                    break; // Lose this reply and force negotiation on a fresh socket.
+                }
+                let bytes: Vec<_> = (start * width..(start + count) * width)
+                    .map(|i| i as u8)
+                    .collect();
+                let mut data = vec![0xff, if indexed { 9 } else { 4 }];
+                data.extend_from_slice(
+                    &((if indexed {
+                        bytes.len()
+                    } else {
+                        bytes.len() * 8
+                    }) as u16)
+                        .to_be_bytes(),
+                );
+                data.extend(bytes);
+                let reply = Pdu {
+                    kind: PduType::AckData,
+                    reference: job.reference,
+                    error: 0,
+                    parameters: vec![4, 1],
+                    data,
+                };
+                let mut raw = vec![2, 0xf0, 0x80];
+                raw.extend(reply.encode().unwrap());
+                send_frame(&mut stream, &raw);
+                expected += count;
+            }
+        }
+    });
+    (endpoint, worker)
+}
+
+/// Both byte and indexed-element reads must rebuild more than the failed old chunk.
+#[test]
+fn shrinking_pdu_replans_all_unread_chunks_and_preserves_acknowledged_prefix() {
+    for area in [rs_snap7::Area::Db, rs_snap7::Area::Timers] {
+        for completed in [0, 1] {
+            let (endpoint, worker) = shrinking_read_peer(area, completed);
+            let client = Client::connect(config(endpoint)).unwrap();
+            let db = if area == rs_snap7::Area::Db { 1 } else { 0 };
+            let width = if area == rs_snap7::Area::Timers { 2 } else { 1 };
+            assert_eq!(
+                client.read_area(area, db, 37, 1000).unwrap(),
+                (37 * width..1037 * width)
+                    .map(|i| i as u8)
+                    .collect::<Vec<_>>()
+            );
+            client.disconnect().unwrap();
+            worker.join().unwrap();
+        }
+    }
+}
+
+/// Async execution uses the same remaining element count and original deadline.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_shrinking_pdu_replans_all_unread_chunks_and_preserves_prefix() {
+    for area in [rs_snap7::Area::Db, rs_snap7::Area::Timers] {
+        for completed in [0, 1] {
+            let (endpoint, worker) = shrinking_read_peer(area, completed);
+            let client = rs_snap7::AsyncClient::connect(config(endpoint))
+                .await
+                .unwrap();
+            let db = if area == rs_snap7::Area::Db { 1 } else { 0 };
+            let width = if area == rs_snap7::Area::Timers { 2 } else { 1 };
+            assert_eq!(
+                client.read_area(area, db, 37, 1000).await.unwrap(),
+                (37 * width..1037 * width)
+                    .map(|i| i as u8)
+                    .collect::<Vec<_>>()
+            );
+            client.disconnect().await.unwrap();
+            worker.join().unwrap();
+        }
+    }
+}

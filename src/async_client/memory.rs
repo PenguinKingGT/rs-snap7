@@ -35,18 +35,18 @@ impl Session {
                 )
                 .await;
             if matches!(response, Err(Error::InvalidInput(_))) && before != self.limits.pdu_length {
+                // Recovery invalidates every queued chunk's old PDU budget.
+                // Keep acknowledged bytes and rebuild the entire unread range in elements.
                 let smaller = chunks(
                     area,
                     db,
                     address.start(),
-                    usize::from(address.count()),
+                    count - data.len() / word.size(),
                     word,
                     self.limits.pdu_length,
                     false,
                 )?;
-                for piece in smaller.into_iter().rev() {
-                    pending.push_front(piece);
-                }
+                pending = smaller.into();
                 continue;
             }
             let mut outcomes = self.validate(protocol::parse_read(&response?, &[address]))?;
