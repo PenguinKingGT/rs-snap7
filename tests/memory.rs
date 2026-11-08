@@ -52,39 +52,63 @@ impl Peer {
                     data.extend(info);
                     (7, vec![0, 1, 0x12, 8, 0x12, 0x83, 3, 0, 0, 0, 0, 0])
                 } else {
-                    assert_eq!(params[1], 1);
-                    let address = &params[2..14];
-                    let count = usize::from(u16::from_be_bytes([address[4], address[5]]));
-                    let indexed = matches!(address[8], 0x1c | 0x1d);
-                    let wire_offset =
-                        u32::from_be_bytes([0, address[9], address[10], address[11]]) as usize;
-                    let start = if indexed {
-                        wire_offset * 2
-                    } else {
-                        wire_offset / 8
-                    };
-                    let size = count * if indexed { 2 } else { 1 };
-                    let mut memory = bytes.lock().unwrap();
-                    if params[0] == 4 {
-                        data.extend_from_slice(&[0xff, if indexed { 9 } else { 4 }]);
-                        data.extend_from_slice(
-                            &((if indexed { size } else { size * 8 }) as u16).to_be_bytes(),
-                        );
-                        data.extend_from_slice(&memory[start..start + size]);
-                    } else {
-                        assert_eq!(params[0], 5);
+                    let item_count = usize::from(params[1]);
+                    assert!(item_count <= 20);
+                    if params[0] == 5 {
                         writes += 1;
                         if drop_at == Some(writes) {
                             return;
                         }
-                        if fail_at == Some(writes) {
-                            data.push(5);
+                    }
+                    let mut payload_offset = 0;
+                    for (index, address) in params[2..].chunks_exact(12).enumerate() {
+                        let count = usize::from(u16::from_be_bytes([address[4], address[5]]));
+                        let indexed = matches!(address[8], 0x1c | 0x1d);
+                        let wire_offset =
+                            u32::from_be_bytes([0, address[9], address[10], address[11]]) as usize;
+                        let start = if indexed {
+                            wire_offset * 2
                         } else {
-                            memory[start..start + size].copy_from_slice(&payload[4..4 + size]);
-                            data.push(0xff);
+                            wire_offset / 8
+                        };
+                        let size = count
+                            * match address[3] {
+                                4 | 5 | 0x1c | 0x1d => 2,
+                                6..=8 => 4,
+                                _ => 1,
+                            };
+                        let mut memory = bytes.lock().unwrap();
+                        let valid = start + size <= memory.len();
+                        if params[0] == 4 {
+                            if valid {
+                                data.extend_from_slice(&[0xff, if indexed { 9 } else { 4 }]);
+                                data.extend_from_slice(
+                                    &((if indexed { size } else { size * 8 }) as u16).to_be_bytes(),
+                                );
+                                data.extend_from_slice(&memory[start..start + size]);
+                                if index + 1 < item_count && size % 2 == 1 {
+                                    data.push(0);
+                                }
+                            } else {
+                                data.extend_from_slice(&[5, 0, 0, 0]);
+                            }
+                        } else {
+                            assert_eq!(params[0], 5);
+                            if fail_at == Some(writes) || !valid {
+                                data.push(5);
+                            } else {
+                                memory[start..start + size].copy_from_slice(
+                                    &payload[payload_offset + 4..payload_offset + 4 + size],
+                                );
+                                data.push(0xff);
+                            }
+                            payload_offset += 4 + size;
+                            if index + 1 < item_count && size % 2 == 1 {
+                                payload_offset += 1;
+                            }
                         }
                     }
-                    (3, vec![params[0], 1])
+                    (3, vec![params[0], params[1]])
                 };
                 let mut response = vec![2, 0xf0, 0x80, 0x32, kind, 0, 0, p[4], p[5]];
                 response.extend_from_slice(&(response_params.len() as u16).to_be_bytes());
@@ -233,6 +257,35 @@ fn concurrent_bit_updates_preserve_other_bits() {
     client.db_write_bool(1, 0, 3, false).unwrap();
     assert_eq!(client.db_read_byte(1, 0).unwrap(), 247);
     assert!(client.db_write_bool(1, 0, 8, true).is_err());
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Mixed item results, odd padding, large-variable splitting, and original order.
+#[test]
+fn batch_reads_and_writes_preserve_item_results() {
+    use rs_snap7::Address;
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    let first = Address::db(1, 10, 301).unwrap();
+    let second = Address::db(1, 500, 3).unwrap();
+    let invalid = Address::db(1, 2000, 1).unwrap();
+    let writes = client
+        .write_multi_vars(&[(first, &[0x33; 301]), (invalid, &[7]), (second, &[1, 2, 3])])
+        .unwrap();
+    assert!(writes[0].is_ok());
+    assert!(matches!(writes[1], Err(Error::Item(5))));
+    assert!(writes[2].is_ok());
+    let reads = client.read_multi_vars(&[second, invalid, first]).unwrap();
+    assert_eq!(reads[0].as_ref().unwrap(), &[1, 2, 3]);
+    assert!(matches!(reads[1], Err(Error::Item(5))));
+    assert_eq!(reads[2].as_ref().unwrap(), &vec![0x33; 301]);
+    assert!(client.read_multi_vars(&[second; 21]).is_err());
+    assert!(client.write_multi_vars(&[(second, &[0])]).is_err());
+    assert!(client.read_multi_vars(&[]).unwrap().is_empty());
+    assert!(client.write_multi_vars(&[]).unwrap().is_empty());
+    let reads = client.read_multi_vars(&[second; 20]).unwrap();
+    assert!(reads.into_iter().all(|r| r.unwrap() == [1, 2, 3]));
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }

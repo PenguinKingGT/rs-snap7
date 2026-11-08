@@ -8,8 +8,9 @@ See the [migration tracker](docs/migration.md) for planned features and progress
 The [architecture design](docs/architecture.md) describes module responsibilities
 and implementation rules.
 
-Foundation types, validated addresses, and structured errors are implemented; PLC
-communication is not available yet. The package is named `rs-snap7`, its Rust crate name is
+The blocking client supports classic S7 connections, raw and typed memory
+operations, DB helpers, and multi-variable reads/writes. Hardware validation is
+still pending; consult the tracker for remaining capabilities. The package is named `rs-snap7`, its Rust crate name is
 `rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
 attribution. Publishing is currently disabled.
 
@@ -42,3 +43,19 @@ explain complex logic, following `AGENTS.md`.
 
 Write comments and `AGENTS.md` in English. Keep the default README in English and
 update the Chinese translation alongside it.
+
+## Blocking Client Example
+
+```rust,no_run
+use rs_snap7::{Client, ClientConfig};
+
+fn main() -> rs_snap7::Result<()> {
+    let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
+    let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?)?;
+    let value = client.db_read_int(1, 0)?;
+    println!("DB1.DBW0 = {value}");
+    client.disconnect()
+}
+```
+
+See [compatibility notes](docs/compatibility.md) for deliberate interface changes.

@@ -6,6 +6,7 @@ pub mod client;
 pub mod codec;
 pub mod error;
 mod operations;
+mod planner;
 pub mod protocol;
 mod session;
 pub mod transport;

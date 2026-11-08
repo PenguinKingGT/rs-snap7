@@ -1,5 +1,6 @@
 //! Blocking client configuration and public operation entry points.
 
+mod batch;
 mod typed;
 
 use crate::protocol::{Pdu, PduType};
