@@ -55,3 +55,6 @@ pub mod partner;
 
 #[cfg(feature = "ppi")]
 pub mod ppi;
+
+#[cfg(feature = "discovery")]
+pub mod discovery;

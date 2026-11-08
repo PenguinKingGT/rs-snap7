@@ -24,3 +24,7 @@ tag-import = ["dep:csv", "dep:serde_json", "dep:roxmltree"]
 server = []
 partner = []
 ppi = ["dep:serialport"]
+discovery = ["dep:pnet_datalink"]
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+pnet_datalink = { version = "0.35.0", optional = true }

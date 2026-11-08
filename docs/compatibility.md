@@ -201,3 +201,22 @@ implicitly chunked. Counts are bytes for S/SM/I/Q/M/V and 16-bit elements for
 AI/AQ/C/T; timer/counter offsets are item indexes. V maps to wire DB1.
 Multimaster, token passing and PPI-over-TCP remain outside this experimental
 baseline. No physical serial adapter or S7-200 has been validated locally.
+
+## PROFINET DCP discovery
+
+The discovery feature implements Identify-All and directed Identify over Ethernet,
+independent of S7 TCP. Device names/family, IP/netmask/gateway and vendor/device
+IDs remain optional where absent. Collection correlates transaction IDs, handles
+up to two VLAN tags, skips unknown checked blocks, and deduplicates by source
+MAC. Matching malformed replies fail explicitly; unrelated traffic is ignored.
+Timeout, device and traffic-count limits bound each window. No DCP Set operation
+is exposed.
+
+The built-in pnet_datalink adapter (MIT/Apache-2.0/BSD-3-Clause) selects an up
+interface by local IPv4 on Linux/macOS and needs raw-socket/BPF permissions.
+Other platforms return Unsupported and may inject FrameIo. No live PLC discovery
+or privileged capture has been run locally; normal tests use captured-style
+vectors and a fake adapter. Header/block layouts follow the
+[Scapy protocol definitions](https://github.com/secdev/scapy/blob/master/scapy/contrib/pnio_dcp.py);
+adapter timeout capabilities follow
+[pnet_datalink Config](https://docs.rs/pnet_datalink/0.35.0/pnet_datalink/struct.Config.html).
