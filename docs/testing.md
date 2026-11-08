@@ -129,3 +129,18 @@ The four all-feature opt-in tests are two Python peer tests and two real-PLC
 tests. Python tests were then run explicitly and passed. The two real-PLC tests
 were not run. Remote operating-system matrix jobs and live PPI/DCP acceptance
 were not executed. Test totals are test-function counts, not branch coverage.
+
+## Review Regression Cases
+
+The following cases supplement the baseline suite:
+
+| Behavior | Regression evidence |
+| --- | --- |
+| Smaller PDU after reconnect | recovery tests read 1000 bytes/elements from nonzero offsets, lose the first or a later chunk, preserve acknowledged prefixes, and replan all unread DB/timer chunks in blocking/async clients |
+| Exact write lengths | server engine tests corrupt the second item's bit/byte length and assert no item modifies memory; valid BYTE/INT/REAL/CHAR writes still succeed |
+| DINTEGER transport 0x06 | protocol tests cover scalar/array byte lengths, malformed widths and mixed alignment; independent peers verify subsequent requests keep blocking/async connections usable |
+| Complete mutation acknowledgement | mutation_ack tests cover all CPU control, clock-write and password operations, wrong services, unexpected payload/continuation, definite refusals and unsent errors, with no replay and matching sync/async behavior |
+| Final-item read padding | server tests cover PDU 128/129/130, exact single/multiple-item responses, nonfinal padding and refusal when the actual response exceeds the limit by one byte |
+
+These regressions run without hardware; optional Python peer acceptance can be
+run separately using the command above.

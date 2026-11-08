@@ -187,3 +187,36 @@ fn native_integer_real_and_character_write_transport_sizes_are_supported() {
     assert_eq!(result.next().unwrap().unwrap(), b"ABC");
     client.disconnect().unwrap();
 }
+
+/// A full odd-sized PDU must not reserve a nonexistent final alignment byte.
+#[test]
+fn exact_read_response_budgets_allow_odd_final_items() {
+    for pdu in [128u16, 129, 130] {
+        let mut config = ServerConfig::new("127.0.0.1:0".parse().unwrap());
+        config.pdu_length = pdu;
+        let server = Server::start(config).unwrap();
+        server.register_area(Area::Db, 1, vec![0x11; 128]).unwrap();
+        server.register_area(Area::Db, 2, vec![0x22; 128]).unwrap();
+        let client = client(&server);
+        let size = usize::from(pdu) - 18;
+        assert_eq!(client.db_read(1, 0, size).unwrap(), vec![0x11; size]);
+        // Both even/odd middle items and odd/even final items fit exactly.
+        for first in [101u16, 102, 103] {
+            let last = pdu - 22 - first - first % 2;
+            let addresses = [
+                rs_snap7::Address::db(1, 0, first).unwrap(),
+                rs_snap7::Address::db(2, 0, last).unwrap(),
+            ];
+            let mut values = client.read_multi_vars(&addresses).unwrap().into_iter();
+            assert_eq!(
+                values.next().unwrap().unwrap(),
+                vec![0x11; usize::from(first)]
+            );
+            assert_eq!(
+                values.next().unwrap().unwrap(),
+                vec![0x22; usize::from(last)]
+            );
+        }
+        client.disconnect().unwrap();
+    }
+}

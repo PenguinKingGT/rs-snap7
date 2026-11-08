@@ -296,10 +296,12 @@ impl Engine<'_> {
         let read_budget = 14
             + addresses
                 .iter()
-                .map(|address| {
-                    4 + address
-                        .as_ref()
-                        .map_or(0, |a| a.byte_len().next_multiple_of(2))
+                .enumerate()
+                .map(|(index, address)| {
+                    let size = address.as_ref().map_or(0, |a| a.byte_len());
+                    // Only nonfinal items are padded, exactly as in the encoder below.
+                    let padding = if index + 1 < count { size % 2 } else { 0 };
+                    4 + size + padding
                 })
                 .sum::<usize>();
         if !writing && read_budget > self.pdu {
@@ -1026,6 +1028,53 @@ mod tests {
             assert_eq!(reply.data, [0xff, 0xff]);
             assert_eq!(&memory.snapshot().unwrap()[4..4 + value.len()], &value);
             memory.with_mut(|bytes| bytes.fill(0xaa)).unwrap();
+        }
+    }
+
+    /// Budget exactly what the encoder emits, preserving nonfinal padding and overflow refusal.
+    #[test]
+    fn read_budget_matches_wire_length_at_odd_and_even_boundaries() {
+        let server = Server::start(ServerConfig::new("127.0.0.1:0".parse().unwrap())).unwrap();
+        server.register_area(Area::Db, 1, vec![0; 128]).unwrap();
+        let mut engine = Engine {
+            shared: &server.shared,
+            peer: "127.0.0.1:1".parse().unwrap(),
+            pdu: 129,
+            continuation: None,
+            upload: None,
+            download: None,
+        };
+        let cases = [
+            (vec![Address::db(1, 0, 111).unwrap()], 129),
+            (
+                vec![
+                    Address::db(1, 0, 105).unwrap(),
+                    Address::db(1, 0, 1).unwrap(),
+                ],
+                129,
+            ),
+            (
+                vec![
+                    Address::db(1, 0, 104).unwrap(),
+                    Address::db(1, 0, 3).unwrap(),
+                ],
+                129,
+            ),
+        ];
+        for (addresses, exact) in cases {
+            let request = protocol::read_request(1, &addresses).unwrap();
+            engine.pdu = exact;
+            let response = engine.memory(&request).unwrap();
+            assert_eq!(response.error, 0);
+            assert_eq!(response.encode().unwrap().len(), exact);
+            assert!(
+                protocol::parse_read(&response, &addresses)
+                    .unwrap()
+                    .iter()
+                    .all(Result::is_ok)
+            );
+            engine.pdu = exact - 1;
+            assert_eq!(engine.memory(&request).unwrap().error, 0x8500);
         }
     }
 }
