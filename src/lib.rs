@@ -9,6 +9,7 @@ pub mod logo;
 mod operations;
 mod planner;
 pub mod policy;
+pub mod pool;
 pub mod protocol;
 mod session;
 pub mod szl;
@@ -24,3 +25,7 @@ pub use types::{Address, Area, BlockType, CpuState, Parameter, ServerArea, WordL
 pub mod async_client;
 #[cfg(feature = "async")]
 pub use async_client::AsyncClient;
+
+#[cfg(feature = "async")]
+pub use async_client::AsyncClientPool;
+pub use pool::ClientPool;

@@ -8,9 +8,11 @@ mod diagnostics;
 mod force;
 mod management;
 mod memory;
+mod pool;
 mod security;
 mod session;
 mod transport;
+pub use pool::AsyncClientPool;
 mod typed;
 
 use self::session::Session;

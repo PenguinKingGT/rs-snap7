@@ -12,20 +12,38 @@ impl AsyncClient {
         if !session.is_connected() {
             return Err(Error::Disconnected);
         }
-        let plan = planner::batches(addresses, session.limits.pdu_length, false)?;
-        let mut results: Vec<Result<Vec<u8>>> = addresses.iter().map(|_| Ok(Vec::new())).collect();
-        for pieces in plan {
+        let plan = session.read_plan(addresses)?;
+        let mut results: Vec<Result<Vec<u8>>> =
+            (0..plan.block_count()).map(|_| Ok(Vec::new())).collect();
+        for pieces in &plan.packets {
             let packet: Vec<_> = pieces.iter().map(|piece| piece.address).collect();
             let response = session
                 .transact(|reference| protocol::read_request(reference, &packet))
                 .await?;
             let outcomes = session.validate(protocol::parse_read(&response, &packet))?;
-            for (piece, outcome) in pieces.into_iter().zip(outcomes) {
+            for (piece, outcome) in pieces.iter().zip(outcomes) {
                 match (&mut results[piece.index], outcome) {
                     (Ok(data), Ok(fragment)) => data.extend(fragment),
                     (slot @ Ok(_), Err(error)) => *slot = Err(error),
                     _ => {}
                 }
+            }
+        }
+        let fallback = plan.fallback_items(&results);
+        let mut results = plan.extract(results)?;
+        for (index, address) in fallback {
+            match session
+                .read_area(
+                    address.area(),
+                    address.db_number(),
+                    address.start(),
+                    usize::from(address.count()),
+                )
+                .await
+            {
+                Ok(data) => results[index] = Ok(data),
+                Err(error @ Error::Item(_)) => results[index] = Err(error),
+                Err(error) => return Err(error),
             }
         }
         Ok(results)

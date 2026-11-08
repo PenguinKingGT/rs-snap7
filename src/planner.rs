@@ -119,3 +119,169 @@ mod tests {
         assert_eq!(plans[1][0].offset, 110);
     }
 }
+
+/// A merged byte read with mappings back to caller variables.
+#[derive(Debug)]
+struct ReadBlock {
+    address: Address,
+    mappings: Vec<(usize, usize, usize)>,
+}
+
+/// Reusable read plan cached by original layout and negotiated PDU length.
+#[derive(Debug)]
+pub(crate) struct ReadPlan {
+    inputs: Vec<Address>,
+    pdu: u16,
+    blocks: Vec<ReadBlock>,
+    pub(crate) packets: Vec<Vec<Piece>>,
+}
+
+impl ReadPlan {
+    /// Sort and merge adjacent/overlapping byte reads without reading unrequested gaps.
+    pub(crate) fn new(inputs: &[Address], pdu: u16) -> Result<Self> {
+        if inputs.len() > MAX_ITEMS {
+            return Err(Error::InvalidInput("at most 20 variables per batch call"));
+        }
+        let mut sorted: Vec<_> = inputs.iter().copied().enumerate().collect();
+        sorted.sort_by_key(|(_, a)| (a.area() as u8, a.db_number(), a.word_len() as u8, a.start()));
+        let mut blocks: Vec<ReadBlock> = Vec::new();
+        for (index, address) in sorted {
+            if let Some(previous) = blocks.last_mut()
+                && address.word_len() == crate::WordLen::Byte
+                && previous.address.word_len() == crate::WordLen::Byte
+                && address.area() == previous.address.area()
+                && address.db_number() == previous.address.db_number()
+            {
+                let start = previous.address.start();
+                let previous_end = start + u32::from(previous.address.count());
+                let end = (address.start() + u32::from(address.count())).max(previous_end);
+                if address.start() <= previous_end && end - start <= 65535 {
+                    previous.mappings.push((
+                        index,
+                        (address.start() - start) as usize,
+                        address.byte_len(),
+                    ));
+                    previous.address = Address::new(
+                        address.area(),
+                        address.db_number(),
+                        start,
+                        crate::WordLen::Byte,
+                        (end - start) as u16,
+                    )?;
+                    continue;
+                }
+            }
+            blocks.push(ReadBlock {
+                address,
+                mappings: vec![(index, 0, address.byte_len())],
+            });
+        }
+        let addresses: Vec<_> = blocks.iter().map(|b| b.address).collect();
+        let packets = batches(&addresses, pdu, false)?;
+        Ok(Self {
+            inputs: inputs.to_vec(),
+            pdu,
+            blocks,
+            packets,
+        })
+    }
+
+    /// Whether a cached plan is valid for this layout and current negotiated limits.
+    pub(crate) fn matches(&self, inputs: &[Address], pdu: u16) -> bool {
+        self.inputs == inputs && self.pdu == pdu
+    }
+    /// Number of merged response buffers to assemble before extraction.
+    pub(crate) fn block_count(&self) -> usize {
+        self.blocks.len()
+    }
+
+    /// Retry individual items after a merged PLC rejection to preserve independent
+    /// item errors when a valid region happens to border an inaccessible region.
+    pub(crate) fn fallback_items(&self, outcomes: &[Result<Vec<u8>>]) -> Vec<(usize, Address)> {
+        self.blocks
+            .iter()
+            .zip(outcomes)
+            .filter(|(block, result)| {
+                block.mappings.len() > 1 && matches!(result, Err(Error::Item(_)))
+            })
+            .flat_map(|(block, _)| {
+                block
+                    .mappings
+                    .iter()
+                    .map(|(index, _, _)| (*index, self.inputs[*index]))
+            })
+            .collect()
+    }
+
+    /// Restore caller order and subranges; merged PLC errors apply to every covered item.
+    pub(crate) fn extract(&self, blocks: Vec<Result<Vec<u8>>>) -> Result<Vec<Result<Vec<u8>>>> {
+        if blocks.len() != self.blocks.len() {
+            return Err(Error::Protocol("read-plan result count mismatch"));
+        }
+        let mut result: Vec<Result<Vec<u8>>> = self.inputs.iter().map(|_| Ok(Vec::new())).collect();
+        for (block, outcome) in self.blocks.iter().zip(blocks) {
+            match outcome {
+                Ok(bytes) => {
+                    if bytes.len() != block.address.byte_len() {
+                        return Err(Error::Protocol("read-plan payload size mismatch"));
+                    }
+                    for &(index, offset, length) in &block.mappings {
+                        result[index] = Ok(bytes[offset..offset + length].to_vec());
+                    }
+                }
+                Err(Error::Item(code)) => {
+                    for &(index, _, _) in &block.mappings {
+                        result[index] = Err(Error::Item(code));
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod read_plan_tests {
+    //! Sort/merge/extraction and cache-key compatibility tests.
+    use super::*;
+
+    /// Overlap, adjacency, DB separation, and duplicate reads preserve caller ordering.
+    #[test]
+    fn merging_and_mapping_preserve_order_and_errors() {
+        let inputs = [
+            Address::db(1, 2, 3).unwrap(),
+            Address::db(1, 0, 3).unwrap(),
+            Address::db(2, 0, 1).unwrap(),
+            Address::db(1, 0, 3).unwrap(),
+        ];
+        let plan = ReadPlan::new(&inputs, 128).unwrap();
+        assert_eq!(plan.block_count(), 2);
+        assert!(plan.matches(&inputs, 128));
+        assert!(!plan.matches(&inputs, 240));
+        let results = plan
+            .extract(vec![Ok(vec![0, 1, 2, 3, 4]), Err(Error::Item(5))])
+            .unwrap();
+        assert_eq!(results[0].as_ref().unwrap(), &[2, 3, 4]);
+        assert_eq!(results[1].as_ref().unwrap(), &[0, 1, 2]);
+        assert!(matches!(results[2], Err(Error::Item(5))));
+        assert_eq!(results[3].as_ref().unwrap(), &[0, 1, 2]);
+    }
+
+    /// Gaps and indexed areas are not widened into unsafe speculative reads.
+    #[test]
+    fn gaps_and_typed_items_remain_separate() {
+        let inputs = [
+            Address::db(1, 0, 1).unwrap(),
+            Address::db(1, 2, 1).unwrap(),
+            Address::new(crate::Area::Counters, 0, 0, crate::WordLen::Counter, 2).unwrap(),
+        ];
+        let plan = ReadPlan::new(&inputs, 128).unwrap();
+        assert_eq!(plan.block_count(), 3);
+        assert!(plan.extract(vec![]).is_err());
+        assert!(
+            plan.extract(vec![Ok(vec![]), Ok(vec![0]), Ok(vec![0; 4])])
+                .is_err()
+        );
+    }
+}

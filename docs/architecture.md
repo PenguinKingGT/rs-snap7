@@ -111,8 +111,9 @@ blocking or async session guard. Independent clients can operate concurrently.
 Do not promise parallel exchanges on one connection before implementing
 reference-based response dispatch and testing negotiated outstanding-job limits.
 
-F10 parallel dispatch is later work: use explicitly independent sessions or a
-bounded dispatcher that routes responses to pending request references. A timeout
+F10 uses `ClientPool`/`AsyncClientPool` with bounded, independent sessions.
+Single-connection pipelining remains later work and would require a
+dispatcher that routes responses to pending request references. A timeout
 or cancellation must remove pending state and prevent late replies being reused.
 Sequential execution alone does not complete F10's parallel-dispatch scope.
 

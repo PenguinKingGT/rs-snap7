@@ -14,6 +14,7 @@ pub(super) struct Session {
     connection: Option<AsyncConnection>,
     pub(super) limits: Negotiated,
     reference: u16,
+    read_plan: Option<std::sync::Arc<crate::planner::ReadPlan>>,
     timeout: Duration,
     limiter: crate::policy::Limiter,
     origin: Instant,
@@ -32,6 +33,7 @@ impl Session {
                 pdu_length: config.requested_pdu,
             },
             reference: 0,
+            read_plan: None,
             timeout: config.transport.timeout,
             limiter: crate::policy::Limiter::new(config.rate_limit)?,
             origin: Instant::now(),
@@ -45,6 +47,24 @@ impl Session {
         session.limits = protocol::parse_setup(&reply, config.requested_pdu)?;
         Ok(session)
     }
+    /// Reuse a pure read plan only when both layout and negotiated limits match.
+    pub(super) fn read_plan(
+        &mut self,
+        inputs: &[crate::Address],
+    ) -> Result<std::sync::Arc<crate::planner::ReadPlan>> {
+        if let Some(plan) = &self.read_plan
+            && plan.matches(inputs, self.limits.pdu_length)
+        {
+            return Ok(std::sync::Arc::clone(plan));
+        }
+        let plan = std::sync::Arc::new(crate::planner::ReadPlan::new(
+            inputs,
+            self.limits.pdu_length,
+        )?);
+        self.read_plan = Some(std::sync::Arc::clone(&plan));
+        Ok(plan)
+    }
+
     /// Whether no prior I/O failure or cancelled exchange invalidated the socket.
     pub(super) fn is_connected(&self) -> bool {
         self.connection.is_some()

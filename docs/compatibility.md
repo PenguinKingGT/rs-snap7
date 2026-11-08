@@ -73,3 +73,9 @@ and failure behavior. No PLC hardware has been validated yet.
   policies share accounting between runtimes. Token bucket burst defaults to
   one request unless explicitly configured. A deadline reached while waiting
   returns `DeadlineBeforeSend`, so an unsent write is not reported as ambiguous.
+
+- Multi-read optimization merges only overlapping/adjacent byte ranges, without
+  speculative gaps. Rejected merged reads fall back to the original items so
+  valid neighbors retain independent results. Plans are cached per layout/PDU.
+  Parallel reads use explicitly independent sessions in bounded pools; clones
+  of one session cannot be added as separate workers.

@@ -526,3 +526,49 @@ async fn async_concurrent_bit_updates_preserve_neighbors() {
     client.disconnect().await.unwrap();
     peer.worker.join().unwrap();
 }
+
+/// A merged error is isolated so adjacent valid bytes retain their own outcome.
+#[test]
+fn merged_read_errors_fall_back_to_original_items() {
+    use rs_snap7::Address;
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    client.db_write(1, 1023, &[55]).unwrap();
+    for _ in 0..2 {
+        let results = client
+            .read_multi_vars(&[
+                Address::db(1, 1023, 1).unwrap(),
+                Address::db(1, 1024, 1).unwrap(),
+            ])
+            .unwrap();
+        assert_eq!(results[0].as_ref().unwrap(), &[55]);
+        assert!(matches!(results[1], Err(Error::Item(5))));
+    }
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Async merged reads use the same plan cache and independent-error fallback.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_merged_read_error_fallback() {
+    use rs_snap7::Address;
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    client.db_write(1, 1023, &[55]).await.unwrap();
+    for _ in 0..2 {
+        let results = client
+            .read_multi_vars(&[
+                Address::db(1, 1023, 1).unwrap(),
+                Address::db(1, 1024, 1).unwrap(),
+            ])
+            .await
+            .unwrap();
+        assert_eq!(results[0].as_ref().unwrap(), &[55]);
+        assert!(matches!(results[1], Err(Error::Item(5))));
+    }
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
