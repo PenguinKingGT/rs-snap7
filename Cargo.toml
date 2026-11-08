@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "A Rust port of python-snap7 for Siemens S7 PLC communication"
 readme = "README.md"
+license = "MIT"
 publish = false
 
 [dependencies]

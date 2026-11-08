@@ -1,5 +1,9 @@
-//! A Rust library for Siemens S7 PLC communication.
+//! An idiomatic Rust implementation of classic Siemens S7 communication.
 //!
-//! This project incrementally ports python-snap7; only the scaffold is implemented.
-//! Protocol encoding, transport, and client interfaces will be introduced alongside
-//! their implementations and tests.
+//! See `docs/migration.md` for implemented capabilities and compatibility limits.
+
+pub mod error;
+pub mod types;
+
+pub use error::{Error, Result};
+pub use types::{Address, Area, BlockType, CpuState, Parameter, ServerArea, WordLen};

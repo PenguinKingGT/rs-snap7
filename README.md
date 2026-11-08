@@ -8,10 +8,10 @@ See the [migration tracker](docs/migration.md) for planned features and progress
 The [architecture design](docs/architecture.md) describes module responsibilities
 and implementation rules.
 
-Only the Rust project scaffold is currently implemented; PLC communication is not
-available yet. The package is named `rs-snap7`, its Rust crate name is
-`rs_snap7`, and it uses the Rust 2024 edition. Publishing is disabled until
-licensing and upstream attribution are established before porting code.
+Foundation types, validated addresses, and structured errors are implemented; PLC
+communication is not available yet. The package is named `rs-snap7`, its Rust crate name is
+`rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
+attribution. Publishing is currently disabled.
 
 ## Project Structure
 
@@ -36,8 +36,7 @@ cargo test --all-targets
 cargo test --doc
 ```
 
-There are currently no implemented features or test cases. Add normal, boundary,
-and error-path tests with each feature. Default tests must run without PLC
+Add normal, boundary, and error-path tests with each feature. Default tests must run without PLC
 hardware; bug fixes must include regression tests. Document public interfaces and
 explain complex logic, following `AGENTS.md`.
 

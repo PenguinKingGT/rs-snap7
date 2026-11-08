@@ -1,0 +1,10 @@
+rs-snap7 is a Rust port of python-snap7.
+
+Upstream: https://github.com/gijzelaerr/python-snap7
+Reference version: 3.4.0
+Reference commit: da93f21a06ee5565f7793323ddbdb542f31ec9a2
+
+Protocol constants, behavior, and compatibility vectors are derived from the
+upstream implementation and tests, licensed under MIT. The upstream copyright
+notice and license terms are preserved in LICENSE. Rust implementation and
+project documentation are distributed under the same MIT license.

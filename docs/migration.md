@@ -8,8 +8,8 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **0 of 28 migration features are Done.**
-There are currently no Rust feature implementations or tests.
+The Rust library scaffold is complete. **1 of 28 migration features are Done.**
+Foundation types and structured errors are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
 status and summary in the same PR as implementation changes. Mark a feature
@@ -24,7 +24,7 @@ Start here; later groups build on these capabilities.
 
 | ID | Feature to implement | Upstream reference | Status |
 | --- | --- | --- | --- |
-| F01 | Memory areas, word lengths, parameters, result types, and structured errors with protocol codes | `type.py`, `error.py`, `datatypes.py` in `snap7/` | Todo |
+| F01 | Memory areas, word lengths, parameters, result types, and structured errors with protocol codes | `type.py`, `error.py`, `datatypes.py` in `snap7/` | Done — [types](../src/types.rs), [errors](../src/error.rs), [tests](../tests/types.rs) |
 | F02 | Byte codecs: bits, signed/unsigned integers, floats, characters, STRING/WSTRING, bounds and byte order | `snap7/util/getters.py`, `setters.py`, `datatypes.py` | Todo |
 | F03 | Date/time codecs: S5TIME, TIME, DATE, TOD, DT, DTL, and long variants, preserving upstream read/write limits | `snap7/util/getters.py`, `setters.py` | Todo |
 | F04 | TCP/TPKT/COTP transport: connection handshake, TSAPs, timeouts, framing, fragmentation, and disconnect | `snap7/connection.py` | Todo |

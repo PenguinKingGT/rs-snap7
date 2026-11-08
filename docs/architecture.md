@@ -3,8 +3,7 @@
 ## Status & Goals
 
 This is the target architecture for the features in the
-[migration tracker](migration.md), based on its python-snap7 baseline. Only the
-Rust scaffold exists today. Module paths, interfaces, and Cargo features below
+[migration tracker](migration.md), based on its python-snap7 baseline. Implementation has started; consult the tracker for current capabilities. Module paths, interfaces, and Cargo features below
 are proposed; introduce them incrementally with implementation and tests.
 The tracker remains the source of truth for implementation progress.
 
