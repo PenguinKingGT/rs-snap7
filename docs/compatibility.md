@@ -23,3 +23,11 @@ and failure behavior. No PLC hardware has been validated yet.
 - Transport validates COTP Class 0 headers and negotiation TLVs more strictly
   than the Python implementation. Fragmentation is bounded by the negotiated
   TPDU size; malformed frames and timeouts invalidate the connection.
+
+- `ClientConfig` replaces numeric parameter getters/setters and ignored legacy
+  constructor arguments. Settings are applied before connecting; routing and
+  explicit variable-length TSAPs live in `TransportConfig`. `reconnect()` is
+  explicit; automatic recovery and heartbeat are not implemented yet.
+- `Client` clones serialize all operations on one shared session, improving on
+  upstream blocking-client thread safety. `is_connected()` reports local state,
+  not remote liveness. Raw S7 jobs receive a session-owned request reference.

@@ -178,7 +178,7 @@ impl Connection {
     }
 
     /// Assemble at most 1024 fragments and at most the configured message limit.
-    fn receive_until(&mut self, deadline: Instant) -> Result<Vec<u8>> {
+    pub(crate) fn receive_until(&mut self, deadline: Instant) -> Result<Vec<u8>> {
         let stream = self.stream.as_mut().ok_or(Error::Disconnected)?;
         let mut message = Vec::new();
         for _ in 0..1024 {

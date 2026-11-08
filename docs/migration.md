@@ -8,8 +8,8 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **5 of 28 migration features are Done.**
-Foundation types, errors, and scalar/text codecs are implemented and tested.
+The Rust library scaffold is complete. **6 of 28 migration features are Done.**
+Foundation types, codecs, ISO transport, S7 framing, and client sessions are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
 status and summary in the same PR as implementation changes. Mark a feature
@@ -29,7 +29,7 @@ Start here; later groups build on these capabilities.
 | F03 | Date/time codecs: S5TIME, TIME, DATE, TOD, DT, DTL, and long variants, preserving upstream read/write limits | `snap7/util/getters.py`, `setters.py` | Done — [date/time codecs](../src/codec/datetime.rs), [tests](../tests/datetime.rs) |
 | F04 | TCP/TPKT/COTP transport: connection handshake, TSAPs, timeouts, framing, fragmentation, and disconnect | `snap7/connection.py` | Done — [transport](../src/transport.rs), [tests](../tests/transport.rs) |
 | F05 | S7 PDU encoding/decoding, negotiation, request references, stale/lost response detection, and malformed-packet rejection | `snap7/s7protocol.py` | Done — [protocol](../src/protocol.rs), [tests](../tests/protocol.rs) |
-| F06 | Synchronous client lifecycle, connection parameters, rack/slot, routed connections, and raw ISO exchange | `snap7/client.py`, `client_base.py` | Todo |
+| F06 | Synchronous client lifecycle, connection parameters, rack/slot, routed connections, and raw ISO exchange | `snap7/client.py`, `client_base.py` | Done — [client](../src/client.rs), [session](../src/session.rs), [tests](../tests/client.rs) |
 | F07 | Raw DB/area reads and writes, DB get/fill, I/O/marker/timer/counter helpers, and large-transfer chunking | `snap7/client.py` | Todo |
 | F08 | Typed scalar and array DB reads/writes, including bit-preserving updates | `snap7/client.py`, `async_client.py` | Todo |
 | F09 | Multi-variable reads/writes, item limits, PDU splitting, and per-item errors | `snap7/client.py`, `s7protocol.py` | Todo |
