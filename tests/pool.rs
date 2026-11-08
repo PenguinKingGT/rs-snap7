@@ -5,14 +5,14 @@ use common::*;
 use rs_snap7::{Address, Client, ClientConfig, ClientPool};
 use std::{
     net::TcpListener,
-    sync::{Arc, Barrier},
+    sync::{Arc, Condvar, Mutex},
     thread,
 };
 
 /// Two peers wait for both read requests, proving independent sessions run in parallel.
 #[test]
 fn pool_dispatches_concurrently_and_restores_input_order() {
-    let barrier = Arc::new(Barrier::new(2));
+    let barrier = Arc::new((Mutex::new(0), Condvar::new()));
     let mut workers = Vec::new();
     let mut clients = Vec::new();
     for value in [11, 22] {
@@ -23,7 +23,7 @@ fn pool_dispatches_concurrently_and_restores_input_order() {
             let (mut stream, _) = listener.accept().unwrap();
             negotiate(&mut stream, 480);
             let request = read_frame(&mut stream);
-            barrier.wait();
+            meet(&barrier);
             let p = &request[3..];
             let reply = [
                 2, 0xf0, 0x80, 0x32, 3, 0, 0, p[4], p[5], 0, 2, 0, 5, 0, 0, 4, 1, 0xff, 4, 0, 8,
@@ -55,7 +55,7 @@ fn pool_dispatches_concurrently_and_restores_input_order() {
 #[tokio::test(flavor = "current_thread")]
 async fn async_pool_dispatches_independent_sessions() {
     use rs_snap7::{AsyncClient, AsyncClientPool};
-    let barrier = Arc::new(Barrier::new(2));
+    let barrier = Arc::new((Mutex::new(0), Condvar::new()));
     let mut workers = Vec::new();
     let mut clients = Vec::new();
     for value in [33, 44] {
@@ -66,7 +66,7 @@ async fn async_pool_dispatches_independent_sessions() {
             let (mut stream, _) = listener.accept().unwrap();
             negotiate(&mut stream, 480);
             let request = read_frame(&mut stream);
-            barrier.wait();
+            meet(&barrier);
             let p = &request[3..];
             send_frame(
                 &mut stream,
@@ -93,4 +93,16 @@ async fn async_pool_dispatches_independent_sessions() {
     for worker in workers {
         worker.join().unwrap();
     }
+}
+
+/// Require both peers within a bounded interval so regressions cannot hang CI.
+fn meet(gate: &(Mutex<usize>, Condvar)) {
+    let (count, changed) = gate;
+    let mut count = count.lock().unwrap();
+    *count += 1;
+    changed.notify_all();
+    let (count, _) = changed
+        .wait_timeout_while(count, std::time::Duration::from_secs(2), |count| *count < 2)
+        .unwrap();
+    assert_eq!(*count, 2, "requests were not dispatched concurrently");
 }

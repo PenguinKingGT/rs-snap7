@@ -70,7 +70,8 @@ impl ClientConfig {
 ///
 /// Each complete logical operation holds the session guard, including multi-step
 /// exchanges. Disconnecting any clone disconnects all clones. Dropping the last
-/// clone releases the socket. Use independent clients for parallel connections.
+/// clone stops background work; a blocking probe already in flight may finish
+/// within its configured timeout before releasing the socket. Use independent clients for parallel connections.
 #[derive(Debug, Clone)]
 pub struct Client {
     pub(crate) inner: Arc<Mutex<Session>>,

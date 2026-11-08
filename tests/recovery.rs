@@ -254,3 +254,53 @@ async fn async_heartbeat_probe_and_shutdown() {
     drop(client);
     worker.join().unwrap();
 }
+
+/// Optimized batch plans are rebuilt when recovery negotiates a smaller reply budget.
+#[test]
+fn batch_recovery_replans_merged_variables() {
+    let (endpoint, worker) = recovery_peer(false);
+    let client = Client::connect(config(endpoint)).unwrap();
+    let results = client
+        .read_multi_vars(&[
+            rs_snap7::Address::db(1, 0, 200).unwrap(),
+            rs_snap7::Address::db(1, 200, 100).unwrap(),
+        ])
+        .unwrap();
+    assert_eq!(
+        results[0].as_ref().unwrap(),
+        &(0..200).map(|i| i as u8).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        results[1].as_ref().unwrap(),
+        &(200..300).map(|i| i as u8).collect::<Vec<_>>()
+    );
+    client.disconnect().unwrap();
+    worker.join().unwrap();
+}
+
+/// Async optimized reads use the same smaller-PDU plan invalidation behavior.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_batch_recovery_replans_merged_variables() {
+    let (endpoint, worker) = recovery_peer(false);
+    let client = rs_snap7::AsyncClient::connect(config(endpoint))
+        .await
+        .unwrap();
+    let results = client
+        .read_multi_vars(&[
+            rs_snap7::Address::db(1, 0, 200).unwrap(),
+            rs_snap7::Address::db(1, 200, 100).unwrap(),
+        ])
+        .await
+        .unwrap();
+    assert_eq!(
+        results[0].as_ref().unwrap(),
+        &(0..200).map(|i| i as u8).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        results[1].as_ref().unwrap(),
+        &(200..300).map(|i| i as u8).collect::<Vec<_>>()
+    );
+    client.disconnect().await.unwrap();
+    worker.join().unwrap();
+}
