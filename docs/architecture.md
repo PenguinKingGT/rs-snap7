@@ -3,8 +3,8 @@
 ## Status & Goals
 
 This is the target architecture for the features in the
-[migration tracker](migration.md), based on its python-snap7 baseline. Implementation has started; consult the tracker for current capabilities. Module paths, interfaces, and Cargo features below
-are proposed; introduce them incrementally with implementation and tests.
+[migration tracker](migration.md), based on its python-snap7 baseline. The baseline feature implementation is complete; consult the tracker and testing guide for validation limits. Module paths, interfaces, and Cargo features below
+are implemented with the corresponding features and tests.
 The tracker remains the source of truth for implementation progress.
 
 Build an idiomatic Rust library that preserves supported S7 wire behavior,
@@ -169,7 +169,7 @@ introducing symbolic PLC access or automatic layout discovery.
 Keep the default library blocking and runtime-independent, using `std::net` for
 TCP. Introduce optional capabilities only with their implementations:
 
-| Proposed feature | Purpose / dependency direction |
+| Cargo feature | Purpose / dependency direction |
 | --- | --- |
 | `async` | Native async transport and coordination; Tokio is the proposed runtime |
 | `server`, `partner` | Optional emulator and peer transfer implementations |
@@ -180,8 +180,7 @@ TCP. Introduce optional capabilities only with their implementations:
 
 LOGO!, tag parsing, and DB layout helpers can reuse the core without a runtime
 dependency. Select external crates and minimum supported Rust version when each
-capability is implemented, after checking licensing and platform support. The `async` feature is now configured with optional Tokio; other entries remain
-planned. Tokio socket I/O and absolute timeouts follow its
+capability is implemented, after checking licensing and platform support. The `async` feature is now configured with optional Tokio; the other listed features are implemented except the future tracing adapter. Tokio socket I/O and absolute timeouts follow its
 [transport](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html) and
 [timeout](https://docs.rs/tokio/latest/tokio/time/fn.timeout_at.html) interfaces. CI should eventually
 check default, no-default, all-compatible, and individual optional feature builds.
@@ -228,3 +227,13 @@ Memory areas use cloned RwLock handles; event sinks run after internal guards
 are dropped. COTP passive acceptance is shared with Partner, with strict TLV,
 reference and optional called-TSAP validation. Accepted sockets are explicitly
 put in blocking mode so listener flags cannot leak into session I/O on macOS.
+
+
+## Validation Delivery
+
+Independent wire peers remain separate from the emulator. Fixed-seed generated
+inputs supplement protocol/error vectors, and sustained loopback traffic checks
+session/memory isolation and resource cleanup. Optional Python child peers verify
+the pinned implementation in both directions, with process deadlines and cleanup
+guards. Real-PLC tests require explicit environment/fixture opt-in and record
+observed identification; they are excluded from default and CI execution.

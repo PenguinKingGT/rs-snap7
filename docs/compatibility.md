@@ -212,7 +212,7 @@ MAC. Matching malformed replies fail explicitly; unrelated traffic is ignored.
 Timeout, device and traffic-count limits bound each window. No DCP Set operation
 is exposed.
 
-The built-in pnet_datalink adapter (MIT/Apache-2.0/BSD-3-Clause) selects an up
+The built-in pnet_datalink adapter (MIT OR Apache-2.0) selects an up
 interface by local IPv4 on Linux/macOS and needs raw-socket/BPF permissions.
 Other platforms return Unsupported and may inject FrameIo. No live PLC discovery
 or privileged capture has been run locally; normal tests use captured-style
@@ -237,3 +237,13 @@ byte 37 bit 0 marks temperature availability. DB1 rejects remote memory writes,
 delete and replacement downloads; application sampling retains scoped write
 access. DB2 remains writable. CPU/metrics values reflect the host, not a PLC.
 The stored emulator clock and other server limitations still apply.
+
+## Download emulator difference
+
+Cross-peer tests pin a baseline difference: Python's server requires the entire
+download representation to fit an existing registered DB and stores the received
+bytes verbatim, including a compact header. The Rust emulator instead validates
+a complete compact DB representation and publishes its data body, so full
+upload/download round trips preserve DB contents. The clients preserve the same
+PLC-driven wire exchange in both cases. Python/Rust cross-peer tests cover both
+behaviors without treating Python's memory storage model as physical PLC proof.

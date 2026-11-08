@@ -298,6 +298,9 @@ impl Server {
             .memory
             .write()
             .map_err(|_| Error::Protocol("poisoned area registry"))?;
+        if memory.len() >= 4096 {
+            return Err(Error::InvalidInput("server area limit reached"));
+        }
         if memory.contains_key(&(area as u8, db)) {
             return Err(Error::InvalidInput("area already registered"));
         }

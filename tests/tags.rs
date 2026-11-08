@@ -143,3 +143,14 @@ fn imports_accept_upstream_schemas_and_reject_unsafe_metadata() {
     assert!(load_tia_xml(r#"<D><Number>1</Number><Member Name="x" Datatype="Int"/></D>"#).is_err());
     assert!(load_tia_xml("<!DOCTYPE x [<!ENTITY a 'bad'>]><D>&a;</D>").is_err());
 }
+
+#[cfg(feature = "tag-import")]
+#[test]
+fn duplicate_json_names_or_address_fields_are_rejected() {
+    use rs_snap7::tags::import::load_json;
+    assert!(
+        load_json(r#"{"x":{"db":1,"offset":0,"type":"INT"},"x":{"db":2,"offset":0,"type":"INT"}}"#)
+            .is_err()
+    );
+    assert!(load_json(r#"{"x":{"db":1,"db":2,"offset":0,"type":"INT"}}"#).is_err());
+}

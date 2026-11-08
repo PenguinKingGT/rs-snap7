@@ -243,7 +243,7 @@ impl Engine<'_> {
                     return Err(Error::Protocol("invalid write data header"));
                 }
                 let length = usize::from(codec::read::<u16>(header, 2)?);
-                let length = if matches!(header[1], 3 | 9) {
+                let length = if matches!(header[1], 3 | 7 | 9) {
                     length
                 } else {
                     length.div_ceil(8)
@@ -254,12 +254,13 @@ impl Engine<'_> {
                     .get(cursor..cursor + length)
                     .ok_or(Error::Protocol("truncated write item"))?;
                 if let Ok(address) = address {
-                    let expected = if address.word_len() == WordLen::Bit {
-                        3
-                    } else if address.word_len().is_indexed() {
-                        9
-                    } else {
-                        4
+                    let expected = match address.word_len() {
+                        WordLen::Bit => 3,
+                        WordLen::Int | WordLen::DInt => 5,
+                        WordLen::Real => 7,
+                        WordLen::Char => 9,
+                        word if word.is_indexed() => 9,
+                        _ => 4,
                     };
                     if header[1] != expected {
                         return Err(Error::Protocol(
@@ -432,6 +433,7 @@ impl Engine<'_> {
         if !matches!(p.len(), 8 | 12)
             || p[..3] != [0, 1, 0x12]
             || p[3] as usize + 4 != p.len()
+            || p[4] != if p.len() == 8 { 0x11 } else { 0x12 }
             || p[5] & 0xf0 != 0x40
             || job.data.len() < 4
         {
@@ -452,6 +454,9 @@ impl Engine<'_> {
         }
         if codec::read::<u16>(&job.data, 2)? as usize != job.data.len() - 4 {
             return Err(Error::Protocol("USERDATA payload length mismatch"));
+        }
+        if job.data[..2] != [0xff, 9] && job.data != [0x0a, 0, 0, 0] {
+            return Err(Error::Protocol("invalid USERDATA request data header"));
         }
         let payload = &job.data[4..];
         let data = match (group, sub) {
@@ -763,6 +768,16 @@ impl Engine<'_> {
             .is_ok_and(|m| m.1.load(std::sync::atomic::Ordering::Acquire))
         {
             return Ok(vec![refusal(job, 0xd241)]);
+        }
+        {
+            let registry = self
+                .shared
+                .memory
+                .read()
+                .map_err(|_| Error::Protocol("poisoned registry"))?;
+            if registry.len() >= 4096 && !registry.contains_key(&(Area::Db as u8, number)) {
+                return Ok(vec![refusal(job, 0x8500)]);
+            }
         }
         let size = decimal(&p[20..26])?;
         if !(36..=65571).contains(&size) {

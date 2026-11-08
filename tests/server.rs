@@ -162,3 +162,28 @@ async fn native_async_client_uses_the_same_emulator_services() {
     client.disconnect().await.unwrap();
     server.stop();
 }
+
+#[test]
+fn native_integer_real_and_character_write_transport_sizes_are_supported() {
+    use rs_snap7::{Address, WordLen};
+    let server = server();
+    server.register_area(Area::Db, 1, vec![0; 64]).unwrap();
+    let client = client(&server);
+    let integer = Address::new(Area::Db, 1, 0, WordLen::Int, 1).unwrap();
+    let real = Address::new(Area::Db, 1, 4, WordLen::Real, 1).unwrap();
+    let chars = Address::new(Area::Db, 1, 8, WordLen::Char, 3).unwrap();
+    let int_bytes = (-123i16).to_be_bytes();
+    let real_bytes = 1.5f32.to_be_bytes();
+    let results = client
+        .write_multi_vars(&[(integer, &int_bytes), (real, &real_bytes), (chars, b"ABC")])
+        .unwrap();
+    assert!(results.iter().all(Result::is_ok));
+    let mut result = client
+        .read_multi_vars(&[integer, real, chars])
+        .unwrap()
+        .into_iter();
+    assert_eq!(result.next().unwrap().unwrap(), int_bytes);
+    assert_eq!(result.next().unwrap().unwrap(), real_bytes);
+    assert_eq!(result.next().unwrap().unwrap(), b"ABC");
+    client.disconnect().unwrap();
+}

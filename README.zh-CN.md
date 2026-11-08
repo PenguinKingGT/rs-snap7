@@ -2,14 +2,14 @@
 
 [English](README.md) | 简体中文
 
-将 `python-snap7` 逐步迁移为 Rust 库，用于 Siemens S7 PLC 通信。
+将 `python-snap7` 迁移为 Rust 库，用于 Siemens S7 PLC 通信。
 
-待实现功能与进度见[迁移清单](docs/migration.md)。
+已实现的 28 项基线功能及进度见[迁移清单](docs/migration.md)。
 模块职责与实现约定见[架构设计](docs/architecture.md)。
 测试范围与剩余验收工作见[验证指南](docs/testing.md)。
 
 同步客户端及可选的原生异步客户端已支持经典 S7 连接、原始及类型化内存读写、DB 辅助操作、多变量批量读写、连接恢复、限流、操作事件、PLC 诊断及控制，以及块目录、上传和下载。
-尚未验证真实 PLC，其他能力进度见迁移清单。包名为
+尚未验证真实 PLC，范围限制见兼容性说明。包名为
 `rs-snap7`，Rust 代码中的 crate 名为 `rs_snap7`，采用 Rust 2024 edition。
 项目使用 MIT 许可证；上游署名见 `LICENSE` 与 `NOTICE`。发布暂未启用。
 
@@ -19,12 +19,13 @@
 - `python-snap7/`：本地 Python 参考实现、文档与测试，不纳入当前仓库的 Git 管理。
 - `AGENTS.md`：贡献与代码质量规范。
 
-功能开发时按职责引入模块，集成测试放在 `tests/`，可运行示例放在
+模块按职责组织，集成测试放在 `tests/`，可运行示例放在
 `examples/`。
 
 ## 本地开发
 
 安装支持 Rust 2024 edition 的工具链，以及 `rustfmt` 和 `clippy` 组件。
+受 sysinfo 依赖要求影响，启用全部功能或 demo 需要 Rust 1.95 及以上；本地使用 Rust 1.97.1 验证。
 在仓库根目录执行：
 
 ```sh
@@ -70,6 +71,8 @@ cargo test --doc --all-features
 
 取消已经发送的操作会使连接失效。被取消的写入可能已经在 PLC 上执行，
 后续操作前应显式重新连接。
+
+## 数据工具与可选产品
 
 类型化标签支持 PLC4X/nodeS7 解析、数值校验和同步/异步读写。启用 `tag-import` 可导入 CSV/JSON/TIA XML 文本；符号元数据不代表支持符号 PLC 访问。
 

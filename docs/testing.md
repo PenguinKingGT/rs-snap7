@@ -41,18 +41,91 @@ coordination and socket waits are bounded so failed concurrency tests can exit.
 Numeric coverage percentages have not been measured; test counts do not imply
 complete line/branch coverage.
 
-## CI & Remaining Acceptance Work
+
+## Cross-implementation Acceptance
+
+The ignored Python tests validate the pinned upstream Git revision before starting
+either peer. They cover Rust client → Python server and Python client → Rust server,
+including chunked DB transfers, typed values, catalogs, metadata, uploads and
+downloads. The deliberate emulator download-storage difference is documented
+in the compatibility guide.
+
+```sh
+SNAP7_PYTHON=python3.12 cargo test --test python_compat --features server -- --ignored --nocapture
+```
+
+Python must be >=3.10. SNAP7_PYTHON_REFERENCE can select another checkout at the
+same baseline revision; no pip installation, pytest or PLC is required.
+Normal tests never require Python or that checkout. On this workstation, both
+directions passed using Python 3.12 and the local baseline.
+
+## Deterministic Properties and Stress
+
+```sh
+cargo test --test properties --all-features
+cargo test --test stress --features server
+```
+
+Properties use fixed xorshift seeds: 10,000 independent endian/float-bit cases and
+20,000 malformed packets, headers, date/string payloads and address strings.
+Optional codecs/importers participate when enabled. These reproducible sweeps
+supplement targeted boundary tests; they are not exhaustive fuzzing or measured
+branch coverage. Stress tests run eight independent sessions through 1,600
+write/read cycles, then churn 64 more connections and assert session cleanup.
+
+## Explicit Hardware Acceptance
+
+No physical PLC, serial PPI adapter or privileged DCP network has been exercised.
+The ignored hardware harness requires explicit endpoint and fixture metadata.
+Use a dedicated standard-access DB whose writable bytes are not used by a running
+process. Hardware acceptance results remain pending until these tests are run in
+a documented environment.
+
+```sh
+export SNAP7_RUN_HARDWARE=1
+export SNAP7_PLC_ENDPOINT=192.168.1.10:102
+export SNAP7_PLC_MODEL='actual CPU model'
+export SNAP7_PLC_FIRMWARE='actual firmware version'
+export SNAP7_FIXTURE_DB=100
+export SNAP7_FIXTURE_START=0
+export SNAP7_FIXTURE_SIZE=16
+# Optional: SNAP7_PLC_RACK, SNAP7_PLC_SLOT, SNAP7_HARDWARE_REPORT
+cargo test --test hardware hardware_read -- --ignored --nocapture
+
+# Separate explicit mutation opt-in; original bytes are saved and restored.
+SNAP7_ALLOW_HARDWARE_WRITES=1 cargo test --test hardware hardware_fixture_write -- --ignored --nocapture
+```
+
+Report records include observed CPU/order data, declared firmware/model, endpoint
+and UTC epoch. A write failure triggers best-effort restoration; recovery after an
+ambiguous failure may require operator verification. CPU control/force/block
+mutation, PPI serial and live DCP acceptance need separate lab scenarios; the
+harness deliberately does not infer permission to run these operations.
+
+## CI
 
 [CI](../.github/workflows/ci.yml) configures default/all-feature tests on Linux,
-Windows, and macOS, plus formatting, strict Clippy, and documentation checks.
-Local validation is on macOS; remote matrix results require a pushed workflow run.
+Windows and macOS, plus formatting, strict Clippy and documentation checks.
+Individual feature compilation runs separately to catch accidental coupling.
+Remote matrix results require a pushed workflow run; local results are macOS.
+F28's software suite and opt-in hardware entry points are implemented; physical
+acceptance and remote CI execution remain validation activities, not claimed
+passes.
 
-F28 remains **In progress**. Automated cross-implementation tests against the
-pinned Python peer, sustained stress/resource tests, and an opt-in real-PLC
-acceptance harness remain to be implemented. Existing inline wire vectors derive
-from the baseline recorded in [NOTICE](../NOTICE) and the migration tracker;
-no claim of real-hardware compatibility is made from emulator tests alone.
+## Recorded Local Run
 
-Future hardware runs must record CPU model, firmware, connection settings, fixture
-DB layout, enabled write/control scenarios, and results. Keep hardware tests
-explicitly opt-in; they must never become a prerequisite for normal `cargo test`.
+On 2026-11-08, macOS with Rust 1.97.1 and Python 3.12:
+
+| Check | Result |
+| --- | --- |
+| Locked default/no-default all-target tests | 95 passed; 2 hardware tests ignored |
+| Locked all-feature all-target tests | 154 passed; 4 opt-in tests ignored |
+| All-feature doctests | 3 passed |
+| Explicit pinned Python cross-peer tests | 2 passed, including download in both directions |
+| Individual async/tag-import/server/partner/ppi/discovery/cli/demo builds | All eight passed |
+| rustfmt, strict all-feature Clippy, rustdoc with warnings denied | Passed |
+
+The four all-feature opt-in tests are two Python peer tests and two real-PLC
+tests. Python tests were then run explicitly and passed. The two real-PLC tests
+were not run. Remote operating-system matrix jobs and live PPI/DCP acceptance
+were not executed. Test totals are test-function counts, not branch coverage.

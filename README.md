@@ -2,9 +2,9 @@
 
 English | [简体中文](README.zh-CN.md)
 
-An incremental Rust port of `python-snap7` for Siemens S7 PLC communication.
+A Rust port of `python-snap7` for Siemens S7 PLC communication.
 
-See the [migration tracker](docs/migration.md) for planned features and progress.
+See the [migration tracker](docs/migration.md) for the 28 implemented baseline features and progress.
 The [architecture design](docs/architecture.md) describes module responsibilities
 and implementation rules. See the [validation guide](docs/testing.md) for test
 coverage and remaining acceptance work.
@@ -12,7 +12,7 @@ coverage and remaining acceptance work.
 Blocking and optional native asynchronous clients support classic S7 connections, raw and typed memory
 operations, DB helpers, multi-variable reads/writes, recovery, limits, events, and PLC
 diagnostic/control services, and block catalog/upload/download operations. Hardware validation is
-still pending; consult the tracker for remaining capabilities. The package is named `rs-snap7`, its Rust crate name is
+still pending; consult compatibility notes for explicit scope limits. The package is named `rs-snap7`, its Rust crate name is
 `rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
 attribution. Publishing is currently disabled.
 
@@ -23,13 +23,14 @@ attribution. Publishing is currently disabled.
   excluded from this repository's Git tracking.
 - `AGENTS.md`: contributor and code quality guidelines.
 
-Introduce modules by responsibility as features are developed. Place integration
-tests in `tests/` and runnable examples in `examples/`.
+Modules are organized by responsibility. Integration tests live in `tests/`
+and runnable examples in `examples/`.
 
 ## Local Development
 
 Install a toolchain supporting the Rust 2024 edition, including the `rustfmt` and
-`clippy` components. Run these commands from the repository root:
+`clippy` components. All-feature/demo builds require Rust 1.95 or newer because
+of sysinfo; local validation uses Rust 1.97.1. Run these commands from the repository root:
 
 ```sh
 cargo build
@@ -75,6 +76,8 @@ cargo test --doc --all-features
 
 Cancelling a transmitted operation invalidates its connection. A cancelled write
 may already have executed on the PLC; reconnect explicitly before further work.
+
+## Data Tools and Optional Products
 
 Typed tags support PLC4X/nodeS7 parsing, checked values and sync/async I/O. Enable `tag-import` for CSV/JSON/TIA XML text imports; symbolic metadata does not enable symbolic PLC access.
 

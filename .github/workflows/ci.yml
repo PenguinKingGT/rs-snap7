@@ -40,3 +40,17 @@ jobs:
       - run: rustup toolchain install stable --profile minimal
       - run: cargo +stable test --locked --all-targets ${{ matrix.feature-args }}
       - run: cargo +stable test --locked --doc ${{ matrix.feature-args }}
+
+  features:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [async, tag-import, server, partner, ppi, discovery, cli, demo]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install stable --profile minimal
+      - run: cargo +stable check --locked --all-targets --no-default-features --features "${{ matrix.feature }}"

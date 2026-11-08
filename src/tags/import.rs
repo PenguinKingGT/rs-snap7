@@ -3,6 +3,8 @@
 //! Duplicate names, unknown types, and missing absolute XML offsets are errors;
 //! these must not silently replace a tag or target byte zero.
 
+mod json;
+
 use super::{Tag, parse::offset, type_count};
 use crate::{Area, Error, Result};
 use std::collections::BTreeMap;
@@ -98,8 +100,9 @@ pub fn load_csv(text: &str) -> Result<TagMap> {
 /// Numeric integer offsets are accepted; fractional offsets must be strings.
 pub fn load_json(text: &str) -> Result<TagMap> {
     bounded(text)?;
-    let value: serde_json::Value =
-        serde_json::from_str(text).map_err(|_| Error::InvalidInput("invalid tag JSON"))?;
+    let value: serde_json::Value = serde_json::from_str::<json::Checked>(text)
+        .map(|value| value.0)
+        .map_err(|_| Error::InvalidInput("invalid tag JSON"))?;
     let object = value
         .as_object()
         .ok_or(Error::InvalidInput("tag JSON must be an object"))?;
