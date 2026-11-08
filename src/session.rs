@@ -68,6 +68,14 @@ impl Session {
         result
     }
 
+    /// Invalidate a structurally wrong service reply before another job reuses it.
+    pub(crate) fn validate<T>(&mut self, result: Result<T>) -> Result<T> {
+        if matches!(result, Err(Error::Protocol(_))) {
+            self.connection.abort();
+        }
+        result
+    }
+
     /// Ignore a bounded number of stale frames under the original deadline.
     fn receive_matching(&mut self, deadline: Instant) -> Result<Pdu> {
         for _ in 0..=3 {

@@ -321,3 +321,91 @@ fn check_area(response: &Pdu, function: u8, count: usize) -> Result<()> {
     }
     Ok(())
 }
+
+/// Build an initial USERDATA request with an optional octet-string payload.
+pub fn userdata_request(
+    reference: u16,
+    group: u8,
+    subfunction: u8,
+    payload: Option<&[u8]>,
+) -> Result<Pdu> {
+    if !(1..=15).contains(&group) {
+        return Err(Error::InvalidInput("invalid USERDATA group"));
+    }
+    let mut data = if payload.is_some() {
+        vec![0xff, 9]
+    } else {
+        vec![0x0a, 0]
+    };
+    let payload = payload.unwrap_or_default();
+    let length = u16::try_from(payload.len())
+        .map_err(|_| Error::InvalidInput("USERDATA payload too large"))?;
+    data.extend_from_slice(&length.to_be_bytes());
+    data.extend_from_slice(payload);
+    Ok(Pdu {
+        kind: PduType::UserData,
+        reference,
+        error: 0,
+        parameters: vec![0, 1, 0x12, 4, 0x11, 0x40 | group, subfunction, 0],
+        data,
+    })
+}
+
+/// A validated user-data fragment, retaining continuation metadata.
+#[derive(Debug, Clone)]
+pub struct UserData {
+    /// Reference supplied in a continuation request.
+    pub sequence: u8,
+    /// Data-unit identifier supplied by the peer.
+    pub unit_reference: u8,
+    /// Whether another fragment must be requested.
+    pub more: bool,
+    /// Octet-string service payload without the data header.
+    pub payload: Vec<u8>,
+}
+
+/// Validate service identity, parameter errors, payload lengths, and optional null ACK.
+pub fn parse_userdata(
+    response: &Pdu,
+    group: u8,
+    subfunction: u8,
+    null_ack: bool,
+) -> Result<UserData> {
+    response.check_response()?;
+    let p = &response.parameters;
+    if response.kind != PduType::UserData
+        || p.len() != 12
+        || p[..5] != [0, 1, 0x12, 8, 0x12]
+        || p[5] != 0x80 | group
+        || p[6] != subfunction
+        || p[9] > 1
+    {
+        return Err(Error::Protocol("invalid USERDATA response parameters"));
+    }
+    let code = u16::from_be_bytes([p[10], p[11]]);
+    if code != 0 {
+        return Err(if group == 5 {
+            Error::Authentication(code)
+        } else {
+            Error::Plc(code)
+        });
+    }
+    let d = &response.data;
+    if d.len() < 4 {
+        return Err(Error::Protocol("missing USERDATA data header"));
+    }
+    let size = usize::from(u16::from_be_bytes([d[2], d[3]]));
+    if d.len() != 4 + size {
+        return Err(Error::Protocol("invalid USERDATA data length"));
+    }
+    let is_null = d.as_slice() == [0x0a, 0, 0, 0];
+    if !(d[0] == 0xff && d[1] == 9 || null_ack && is_null) {
+        return Err(Error::Item(d[0]));
+    }
+    Ok(UserData {
+        sequence: p[7],
+        unit_reference: p[8],
+        more: p[9] == 1,
+        payload: d[4..].to_vec(),
+    })
+}

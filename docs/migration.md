@@ -8,8 +8,8 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **6 of 28 migration features are Done.**
-Foundation types, codecs, ISO transport, S7 framing, and client sessions are implemented and tested.
+The Rust library scaffold is complete. **7 of 28 migration features are Done.**
+Foundation types, codecs, transport, protocol, client sessions, and raw memory operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
 status and summary in the same PR as implementation changes. Mark a feature
@@ -30,7 +30,7 @@ Start here; later groups build on these capabilities.
 | F04 | TCP/TPKT/COTP transport: connection handshake, TSAPs, timeouts, framing, fragmentation, and disconnect | `snap7/connection.py` | Done — [transport](../src/transport.rs), [tests](../tests/transport.rs) |
 | F05 | S7 PDU encoding/decoding, negotiation, request references, stale/lost response detection, and malformed-packet rejection | `snap7/s7protocol.py` | Done — [protocol](../src/protocol.rs), [tests](../tests/protocol.rs) |
 | F06 | Synchronous client lifecycle, connection parameters, rack/slot, routed connections, and raw ISO exchange | `snap7/client.py`, `client_base.py` | Done — [client](../src/client.rs), [session](../src/session.rs), [tests](../tests/client.rs) |
-| F07 | Raw DB/area reads and writes, DB get/fill, I/O/marker/timer/counter helpers, and large-transfer chunking | `snap7/client.py` | Todo |
+| F07 | Raw DB/area reads and writes, DB get/fill, I/O/marker/timer/counter helpers, and large-transfer chunking | `snap7/client.py` | Done — [operations](../src/operations.rs), [client](../src/client.rs), [tests](../tests/memory.rs) |
 | F08 | Typed scalar and array DB reads/writes, including bit-preserving updates | `snap7/client.py`, `async_client.py` | Todo |
 | F09 | Multi-variable reads/writes, item limits, PDU splitting, and per-item errors | `snap7/client.py`, `s7protocol.py` | Todo |
 
@@ -45,7 +45,7 @@ Start here; later groups build on these capabilities.
 | F14 | Contextual/structured logging, operation timing/hooks, execution time, and last-error reporting | `snap7/log.py`, `client.py`, `client_base.py` | Todo |
 | F15 | CPU/CP/order/protection information, CPU state, SZL lists, fragmented SZL reads, and diagnostic buffer | `snap7/szl.py`, `client.py`, `s7protocol.py` | Todo |
 | F16 | PLC stop/hot/cold start, clock read/write, compression, and RAM-to-ROM copy | `snap7/client.py`, `s7protocol.py` | Todo |
-| F17 | Block listing/metadata, offline block inspection, upload/full upload, download, and deletion | `snap7/client.py`, `client_base.py`, `s7protocol.py` | Todo |
+| F17 | Block listing/metadata, offline block inspection, upload/full upload, download, and deletion | `snap7/client.py`, `client_base.py`, `s7protocol.py` | In progress — DB metadata sizing implemented for F07; remaining block services pending |
 | F18 | Session password encoding, setting/clearing, and authentication errors | `snap7/client.py`, `s7protocol.py` | Todo |
 | F19 | I/O force-bit operations, cancellation, and force-table reads | `snap7/client.py`, `async_client.py` | Todo |
 | F20 | Typed tags: PLC4X/STEP7 and nodeS7 syntax, strict parsing, read/write/batch reads, CSV/JSON/TIA XML imports, and browse-result conversion | `snap7/tags.py`, `client.py` | Todo |
@@ -61,7 +61,7 @@ Start here; later groups build on these capabilities.
 | F25 | Experimental S7-200 PPI: serial frames/checksums, negotiation, retries, area/V-memory reads and writes | `snap7/ppi.py` | Todo |
 | F26 | PROFINET DCP discovery and identification with device metadata | `snap7/discovery.py` | Todo |
 | F27 | CLI read/write/dump/info/server/discover commands, host-metrics demo, and runnable usage examples | `snap7/cli.py`, `demo.py`, `example/` | Todo |
-| F28 | Shared validation suite: wire vectors, Python behavioral compatibility, property/malformed-input tests, concurrency/stress tests, and opt-in hardware acceptance | `tests/test_conformance.py`, `test_behavioral_compatibility.py`, `test_hypothesis.py`, `test_stress.py`, `tests/real_plc/` | Todo |
+| F28 | Shared validation suite: wire vectors, Python behavioral compatibility, property/malformed-input tests, concurrency/stress tests, and opt-in hardware acceptance | `tests/test_conformance.py`, `test_behavioral_compatibility.py`, `test_hypothesis.py`, `test_stress.py`, `tests/real_plc/` | In progress — wire/codec/local-peer tests exist; shared stress and hardware suites pending |
 
 ## Completion Rules & Scope Limits
 

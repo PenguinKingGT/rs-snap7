@@ -31,3 +31,8 @@ and failure behavior. No PLC hardware has been validated yet.
 - `Client` clones serialize all operations on one shared session, improving on
   upstream blocking-client thread safety. `is_connected()` reports local state,
   not remote liveness. Raw S7 jobs receive a session-owned request reference.
+
+- `db_get`/`db_fill` accept `Option<usize>`: `None` uses block metadata; `Some`
+  supplies a known size. Timer/counter offsets and counts are element indexes,
+  but payloads contain bytes. Definite partial writes and unacknowledged writes
+  use different errors, preserving confirmed progress without replay.
