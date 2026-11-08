@@ -59,8 +59,8 @@ and failure behavior. No PLC hardware has been validated yet.
 
 - LOGO! VM parsing consumes the entire address instead of accepting regex-prefix
   matches. VW/VD retain signed values. The adapter preserves explicit TSAPs and
-  delegates lifecycle/operations to its standard client; automatic recovery is
-  still tracked under F11/F23.
+  delegates lifecycle/operations to its standard client. Automatic recovery now
+  preserves these explicit TSAPs through fresh negotiations (F11/F23).
 
 - Native `AsyncClient` requires the optional `async` feature and a Tokio runtime
   with I/O/time enabled. Supported blocking operations have asynchronous
