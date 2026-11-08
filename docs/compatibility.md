@@ -36,3 +36,12 @@ and failure behavior. No PLC hardware has been validated yet.
   supplies a known size. Timer/counter offsets and counts are element indexes,
   but payloads contain bytes. Definite partial writes and unacknowledged writes
   use different errors, preserving confirmed progress without replay.
+
+- SZL reads validate ID/index and bound continuations to 100 follow-ups, 1 MiB,
+  and one operation deadline. Truncated identification layouts/record tables
+  return errors rather than zero-filled success models. CP/protection layouts
+  follow the pinned Python implementation and are not hardware-validated.
+- CPU status uses SZL 0x0424 and its status byte at body offset 7, rather than
+  the Python baseline's unconditional RUN result. The wire interpretation was
+  checked against the native [Snap7 status operation](https://github.com/SCADACS/snap7/blob/master/src/core/s7_micro_client.cpp).
+  No native implementation code is incorporated or linked.

@@ -9,6 +9,7 @@ mod operations;
 mod planner;
 pub mod protocol;
 mod session;
+pub mod szl;
 pub mod transport;
 pub mod types;
 

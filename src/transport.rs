@@ -161,7 +161,7 @@ impl Connection {
     }
 
     /// Serialize fragments; the low seven TPDU number bits remain zero in Class 0.
-    fn send_until(&mut self, data: &[u8], deadline: Instant) -> Result<()> {
+    pub(crate) fn send_until(&mut self, data: &[u8], deadline: Instant) -> Result<()> {
         let stream = self.stream.as_mut().ok_or(Error::Disconnected)?;
         let width = self.tpdu_size - 3;
         if data.is_empty() {

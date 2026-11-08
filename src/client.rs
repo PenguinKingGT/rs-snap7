@@ -1,6 +1,7 @@
 //! Blocking client configuration and public operation entry points.
 
 mod batch;
+mod diagnostics;
 mod security;
 mod typed;
 

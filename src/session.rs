@@ -47,8 +47,25 @@ impl Session {
 
     /// Reserve a reference, encode, exchange, and validate without replaying requests.
     pub(crate) fn transact(&mut self, build: impl FnOnce(u16) -> Result<Pdu>) -> Result<Pdu> {
+        self.transact_until(build, self.deadline())
+    }
+
+    /// Create a total operation deadline shared by every continuation exchange.
+    pub(crate) fn deadline(&self) -> Instant {
+        Instant::now() + self.timeout
+    }
+
+    /// Execute one exchange within an existing operation deadline.
+    pub(crate) fn transact_until(
+        &mut self,
+        build: impl FnOnce(u16) -> Result<Pdu>,
+        deadline: Instant,
+    ) -> Result<Pdu> {
         if !self.is_connected() {
             return Err(Error::Disconnected);
+        }
+        if Instant::now() >= deadline {
+            return Err(Error::Timeout);
         }
         let next = self.reference.wrapping_add(1);
         let request = build(next)?.encode()?;
@@ -56,8 +73,10 @@ impl Session {
             return Err(Error::InvalidInput("request exceeds negotiated PDU"));
         }
         self.reference = next;
-        let deadline = Instant::now() + self.timeout;
-        self.connection.send(&request)?;
+        if let Err(error) = self.connection.send_until(&request, deadline) {
+            self.connection.abort();
+            return Err(error);
+        }
         let result = self.receive_matching(deadline);
         if result
             .as_ref()

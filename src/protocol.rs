@@ -425,3 +425,27 @@ pub fn encode_password(password: &str) -> Result<[u8; 8]> {
     }
     Ok(encoded)
 }
+
+/// Build a continuation job using the previous USERDATA sequence reference.
+pub fn userdata_followup(reference: u16, group: u8, subfunction: u8, sequence: u8) -> Pdu {
+    Pdu {
+        kind: PduType::UserData,
+        reference,
+        error: 0,
+        parameters: vec![
+            0,
+            1,
+            0x12,
+            8,
+            0x12,
+            0x40 | group,
+            subfunction,
+            sequence,
+            0,
+            0,
+            0,
+            0,
+        ],
+        data: vec![0x0a, 0, 0, 0],
+    }
+}
