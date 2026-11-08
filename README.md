@@ -6,7 +6,8 @@ An incremental Rust port of `python-snap7` for Siemens S7 PLC communication.
 
 See the [migration tracker](docs/migration.md) for planned features and progress.
 The [architecture design](docs/architecture.md) describes module responsibilities
-and implementation rules.
+and implementation rules. See the [validation guide](docs/testing.md) for test
+coverage and remaining acceptance work.
 
 Blocking and optional native asynchronous clients support classic S7 connections, raw and typed memory
 operations, DB helpers, multi-variable reads/writes, recovery, limits, events, and PLC

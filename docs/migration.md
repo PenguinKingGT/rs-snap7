@@ -61,7 +61,7 @@ Start here; later groups build on these capabilities.
 | F25 | Experimental S7-200 PPI: serial frames/checksums, negotiation, retries, area/V-memory reads and writes | `snap7/ppi.py` | Todo |
 | F26 | PROFINET DCP discovery and identification with device metadata | `snap7/discovery.py` | Todo |
 | F27 | CLI read/write/dump/info/server/discover commands, host-metrics demo, and runnable usage examples | `snap7/cli.py`, `demo.py`, `example/` | Todo |
-| F28 | Shared validation suite: wire vectors, Python behavioral compatibility, property/malformed-input tests, concurrency/stress tests, and opt-in hardware acceptance | `tests/test_conformance.py`, `test_behavioral_compatibility.py`, `test_hypothesis.py`, `test_stress.py`, `tests/real_plc/` | In progress — wire/codec/local-peer tests exist; shared stress and hardware suites pending |
+| F28 | Shared validation suite: wire vectors, Python behavioral compatibility, property/malformed-input tests, concurrency/stress tests, and opt-in hardware acceptance | `tests/test_conformance.py`, `test_behavioral_compatibility.py`, `test_hypothesis.py`, `test_stress.py`, `tests/real_plc/` | In progress — [validation guide](testing.md), default/async local-peer tests and CI configured; Python cross-peer, stress and hardware acceptance pending |
 
 ## Completion Rules & Scope Limits
 

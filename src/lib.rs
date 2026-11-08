@@ -2,6 +2,19 @@
 //!
 //! See `docs/migration.md` for implemented capabilities and compatibility limits.
 
+//! # Blocking access
+//!
+//! ```no_run
+//! use rs_snap7::{Client, ClientConfig};
+//! # fn main() -> rs_snap7::Result<()> {
+//! let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
+//! let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?)?;
+//! let _value = client.db_read_int(1, 0)?;
+//! client.disconnect()?;
+//! # Ok(())
+//! # }
+//! ```
+
 pub mod client;
 pub mod codec;
 pub mod error;

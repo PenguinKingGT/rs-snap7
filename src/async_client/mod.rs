@@ -3,6 +3,18 @@
 //! Requires a Tokio runtime with I/O and time enabled. Clones serialize complete
 //! operations on one session. Cancelling an in-flight exchange closes its socket.
 
+//!
+//! ```no_run
+//! use rs_snap7::{AsyncClient, ClientConfig};
+//! #[tokio::main(flavor = "current_thread")]
+//! async fn main() -> rs_snap7::Result<()> {
+//!     let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
+//!     let client = AsyncClient::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
+//!     let _value = client.db_read_int(1, 0).await?;
+//!     client.disconnect().await
+//! }
+//! ```
+
 mod batch;
 mod diagnostics;
 mod force;
