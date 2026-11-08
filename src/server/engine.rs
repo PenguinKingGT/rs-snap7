@@ -246,7 +246,12 @@ impl Engine<'_> {
                 let length = if matches!(header[1], 3 | 7 | 9) {
                     length
                 } else {
-                    length.div_ceil(8)
+                    // BYTE/INTEGER transport lengths count bits, but payloads must
+                    // contain whole bytes. Rounding would accept malformed writes.
+                    if !length.is_multiple_of(8) {
+                        return Err(Error::Protocol("write bit length is not byte-aligned"));
+                    }
+                    length / 8
                 };
                 cursor += 4;
                 let data = job
@@ -254,6 +259,11 @@ impl Engine<'_> {
                     .get(cursor..cursor + length)
                     .ok_or(Error::Protocol("truncated write item"))?;
                 if let Ok(address) = address {
+                    // Check every item before applying any mutation, including
+                    // earlier valid items in a multi-variable write.
+                    if length != address.byte_len() {
+                        return Err(Error::Protocol("write item length does not match address"));
+                    }
                     let expected = match address.word_len() {
                         WordLen::Bit => 3,
                         WordLen::Int | WordLen::DInt => 5,
@@ -978,5 +988,44 @@ mod tests {
         assert_eq!(read(&server.shared, bit).unwrap(), [0, 1]);
         assert_eq!(memory.snapshot().unwrap()[0..2], [0x2a, 0xab]);
         assert!(write(&server.shared, bit, &[2, 1]).is_err());
+    }
+
+    /// No malformed later item may allow an earlier valid item to modify memory.
+    #[test]
+    fn invalid_write_lengths_are_rejected_before_any_item_is_applied() {
+        let server = Server::start(ServerConfig::new("127.0.0.1:0".parse().unwrap())).unwrap();
+        let memory = server.register_area(Area::Db, 1, vec![0xaa; 32]).unwrap();
+        let engine = Engine {
+            shared: &server.shared,
+            peer: "127.0.0.1:1".parse().unwrap(),
+            pdu: 128,
+            continuation: None,
+            upload: None,
+            download: None,
+        };
+        for (word, value, declarations) in [
+            (WordLen::Byte, vec![3, 4], vec![0, 1, 7, 9, 15, 17, 24]),
+            (WordLen::Int, vec![3, 4], vec![0, 1, 7, 9, 15, 17, 24]),
+            (WordLen::Real, vec![0; 4], vec![0, 3, 5]),
+            (WordLen::Char, vec![3, 4], vec![0, 1, 3]),
+        ] {
+            let count = (value.len() / word.size()) as u16;
+            let first = Address::db(1, 0, 2).unwrap();
+            let second = Address::new(Area::Db, 1, 4, word, count).unwrap();
+            let valid = protocol::write_request(1, &[(first, &[1, 2]), (second, &value)]).unwrap();
+            for declaration in declarations {
+                let mut job = valid.clone();
+                codec::write(&mut job.data, 8, declaration as u16).unwrap();
+                assert!(
+                    engine.memory(&job).is_err(),
+                    "{word:?}, length {declaration}"
+                );
+                assert_eq!(memory.snapshot().unwrap(), vec![0xaa; 32]);
+            }
+            let reply = engine.memory(&valid).unwrap();
+            assert_eq!(reply.data, [0xff, 0xff]);
+            assert_eq!(&memory.snapshot().unwrap()[4..4 + value.len()], &value);
+            memory.with_mut(|bytes| bytes.fill(0xaa)).unwrap();
+        }
     }
 }
