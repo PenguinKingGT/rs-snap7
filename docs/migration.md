@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **22 of 28 migration features are Done.**
+The Rust library scaffold is complete. **23 of 28 migration features are Done.**
 Core clients, codecs, batching/optimization, recovery, limits, events, diagnostics, and management operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -55,7 +55,7 @@ Start here; later groups build on these capabilities.
 
 | ID | Feature to implement | Upstream reference | Status |
 | --- | --- | --- | --- |
-| F22 | S7 server/emulator: memory registration/locking, client sessions, protocol services, CPU state, events, callbacks, and configuration | `snap7/server/` | Todo |
+| F22 | S7 server/emulator: memory registration/locking, client sessions, protocol services, CPU state, events, callbacks, and configuration | `snap7/server/` | Done — [server](../src/server/mod.rs), isolated protocol engine, [integration tests](../tests/server.rs); emulation limits documented in compatibility guide |
 | F23 | LOGO! client: address parsing, VM access, connection options, and recovery | `snap7/logo.py` | Done — [LOGO adapter](../src/logo.rs), [syntax tests](../tests/logo.rs), [I/O tests](../tests/memory.rs), [TSAP recovery tests](../tests/recovery.rs) |
 | F24 | Active/passive Partner communication: framed transfers, sync/async send/receive, callbacks, status, and statistics | `snap7/partner.py` | Todo |
 | F25 | Experimental S7-200 PPI: serial frames/checksums, negotiation, retries, area/V-memory reads and writes | `snap7/ppi.py` | Todo |

@@ -353,6 +353,83 @@ pub(crate) fn frame_bytes(payload: &[u8]) -> Result<Vec<u8>> {
     Ok(frame)
 }
 
+/// Accept COTP Class 0 for optional server/partner adapters under one deadline.
+/// Validate TLV bounds and echo the caller's reference in the confirmation.
+#[cfg(any(feature = "server", feature = "partner"))]
+pub(crate) fn accept_connection(
+    mut stream: TcpStream,
+    timeout: Duration,
+    max_message: usize,
+    allowed_tsap: Option<&[u8]>,
+) -> Result<Connection> {
+    if timeout.is_zero()
+        || Instant::now().checked_add(timeout).is_none()
+        || !(1..=65535).contains(&max_message)
+    {
+        return Err(Error::InvalidInput("invalid passive transport limits"));
+    }
+    stream.set_nonblocking(false)?;
+    stream.set_nodelay(true)?;
+    let deadline = Instant::now() + timeout;
+    let request = read_frame(&mut stream, deadline)?;
+    if request.len() < 7
+        || request[0] as usize + 1 != request.len()
+        || request[1] != 0xe0
+        || request[2..4] != [0, 0]
+        || request[6] != 0
+    {
+        return Err(Error::Protocol("invalid COTP connection request"));
+    }
+    let peer_reference = u16::from_be_bytes([request[4], request[5]]);
+    if peer_reference == 0 {
+        return Err(Error::Protocol("zero COTP source reference"));
+    }
+    let mut tpdu_size: usize = 128;
+    let mut called = None;
+    let mut seen = Vec::new();
+    let mut offset = 7;
+    while offset < request.len() {
+        if offset + 2 > request.len() {
+            return Err(Error::Protocol("truncated COTP parameter"));
+        }
+        let kind = request[offset];
+        let length = usize::from(request[offset + 1]);
+        offset += 2;
+        if length == 0 || offset + length > request.len() || seen.contains(&kind) {
+            return Err(Error::Protocol(
+                "invalid COTP parameter length or duplicate",
+            ));
+        }
+        seen.push(kind);
+        let value = &request[offset..offset + length];
+        match kind {
+            0xc0 => {
+                if length != 1 || !(7..=13).contains(&value[0]) {
+                    return Err(Error::Protocol("invalid COTP TPDU exponent"));
+                }
+                tpdu_size = 1 << value[0].min(10);
+            }
+            0xc2 => called = Some(value),
+            _ => {}
+        }
+        offset += length;
+    }
+    if allowed_tsap.is_some() && called != allowed_tsap {
+        return Err(Error::Protocol("called TSAP mismatch"));
+    }
+    let mut confirm = vec![9, 0xd0];
+    confirm.extend_from_slice(&peer_reference.to_be_bytes());
+    confirm.extend_from_slice(&[0, 1, 0, 0xc0, 1, tpdu_size.trailing_zeros() as u8]);
+    write_frame(&mut stream, &confirm, deadline)?;
+    Ok(Connection {
+        stream: Some(stream),
+        timeout,
+        max_message,
+        tpdu_size,
+        peer_reference,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     //! Pure negotiation vectors and malformed TLV coverage.

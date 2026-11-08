@@ -46,3 +46,6 @@ pub use async_client::AsyncClient;
 #[cfg(feature = "async")]
 pub use async_client::AsyncClientPool;
 pub use pool::ClientPool;
+
+#[cfg(feature = "server")]
+pub mod server;

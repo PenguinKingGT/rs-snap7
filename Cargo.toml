@@ -20,3 +20,5 @@ unsafe_op_in_unsafe_fn = "deny"
 [features]
 async = ["dep:tokio"]
 tag-import = ["dep:csv", "dep:serde_json", "dep:roxmltree"]
+server = []
+partner = []

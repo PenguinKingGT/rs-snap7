@@ -145,3 +145,24 @@ coalesce changed writable bytes and checkpoint acknowledged ranges. A failed
 range remains dirty conservatively. Field writes use tag semantics to preserve
 remote BOOL neighbors; row writes replace whole bytes. Refreshing a BOOL field
 refreshes its complete storage byte and discards local edits there.
+
+## S7 emulator
+
+The optional server accepts bounded independent COTP/S7 sessions and exposes
+registered DB/I/O/marker/timer/counter memory. Memory handles provide scoped
+locking; unregistering does not invalidate an in-flight cloned handle.
+Downloads publish a new handle only after a complete compact DB transfer.
+Upload/download/catalog services emulate registered DBs only, up to their wire
+limits; unsupported program blocks and services return explicit errors.
+CPU stop/start changes emulated state. Compression and ROM-copy acknowledge
+without physical side effects. The clock is a deterministic stored timestamp;
+it does not advance automatically. Password services acknowledge valid envelopes
+without implementing PLC access protection. Default identification labels the
+server as an emulator; custom SZLs can override defaults. No force services or
+PLC-program execution are emulated.
+
+Events are bounded and filtered by configured kinds; hooks run outside internal
+locks and hook panics are isolated. Hooks must return promptly and must not wait
+for this server to stop or join its worker. stop/drop closes all registered
+sockets and joins workers. The configured timeout bounds handshake and idle
+sessions. PDU limits and complete write sections are checked before mutation.

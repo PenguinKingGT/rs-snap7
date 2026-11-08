@@ -219,3 +219,12 @@ dynamic values. Blocking/async clients share parsing and encoding, with BOOL
 read/modify/write under one session guard. Metadata import is isolated behind
 tag-import (csv, serde_json, roxmltree; MIT-compatible licenses); callers supply
 text, and symbolic metadata never falls back to a classic byte address.
+
+## Implemented Emulator
+
+The optional server uses one bounded accept thread and at most max_clients
+workers. Each worker owns negotiation, continuation, upload and download state.
+Memory areas use cloned RwLock handles; event sinks run after internal guards
+are dropped. COTP passive acceptance is shared with Partner, with strict TLV,
+reference and optional called-TSAP validation. Accepted sockets are explicitly
+put in blocking mode so listener flags cannot leak into session I/O on macOS.
