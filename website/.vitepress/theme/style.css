@@ -1,0 +1,24 @@
+:root {
+    --vp-c-brand-1: #176a56;
+    --vp-c-brand-2: #237d67;
+    --vp-c-brand-3: #2a8c75;
+    --vp-c-brand-soft: rgba(23, 106, 86, 0.12);
+}
+
+.dark {
+    --vp-c-brand-1: #74d6b5;
+    --vp-c-brand-2: #55c5a1;
+    --vp-c-brand-3: #299b7a;
+    --vp-c-brand-soft: rgba(116, 214, 181, 0.14);
+}
+
+/* Long protocol and migration tables remain scrollable on small screens. */
+.vp-doc table {
+    width: 100%;
+}
+
+/* Give the vector mark a readable size in the homepage hero. */
+.VPHero .image-src {
+    width: 192px;
+    height: 192px;
+}
