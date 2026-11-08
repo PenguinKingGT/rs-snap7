@@ -6,6 +6,7 @@ pub mod client;
 pub mod codec;
 pub mod error;
 pub mod logo;
+pub mod observability;
 mod operations;
 mod planner;
 pub mod policy;

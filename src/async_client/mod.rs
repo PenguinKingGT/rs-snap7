@@ -28,16 +28,24 @@ use tokio::sync::{Mutex, MutexGuard};
 pub struct AsyncClient {
     inner: Arc<Mutex<Session>>,
     config: ClientConfig,
+    observer: Arc<crate::observability::Observer>,
 }
 
 impl AsyncClient {
     /// Connect and negotiate without using blocking socket calls.
     pub async fn connect(config: ClientConfig) -> Result<Self> {
         config.validate()?;
-        let session = Session::connect(&config).await?;
+        let observer = Arc::new(crate::observability::Observer::new(
+            config.transport.endpoint,
+            config.operation_hook.clone(),
+        ));
+        let session = observer
+            .run_async("connect", Session::connect(&config))
+            .await?;
         Ok(Self {
             inner: Arc::new(Mutex::new(session)),
             config,
+            observer,
         })
     }
     /// Report local readiness; this does not probe the remote PLC.
@@ -54,31 +62,62 @@ impl AsyncClient {
     }
     /// Disconnect the shared socket; repeated calls are harmless.
     pub async fn disconnect(&self) -> Result<()> {
-        self.session().await.disconnect().await
+        self.observer
+            .run_async("disconnect", async {
+                self.observer
+                    .run_async("disconnect", async {
+                        self.session().await.disconnect().await
+                    })
+                    .await
+            })
+            .await
     }
     /// Explicitly reconnect with fresh negotiation and no automatic operation replay.
     pub async fn reconnect(&self) -> Result<()> {
-        let mut session = self.session().await;
-        let _ = session.disconnect().await;
-        *session = Session::connect(&self.config).await?;
-        Ok(())
+        self.observer
+            .run_async("reconnect", async {
+                self.observer
+                    .run_async("reconnect", async {
+                        let mut session = self.session().await;
+                        let _ = session.disconnect().await;
+                        *session = Session::connect(&self.config).await?;
+                        Ok(())
+                    })
+                    .await
+            })
+            .await
     }
     /// Exchange a custom S7 request using a fresh session-owned reference.
     pub async fn iso_exchange(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        let job = Pdu::decode(bytes)?;
-        if !matches!(job.kind, PduType::Job | PduType::UserData) {
-            return Err(Error::InvalidInput(
-                "raw exchange requires a job or user-data request",
-            ));
-        }
-        self.session()
+        self.observer
+            .run_async("iso_exchange", async {
+                self.observer
+                    .run_async("iso_exchange", async {
+                        let job = Pdu::decode(bytes)?;
+                        if !matches!(job.kind, PduType::Job | PduType::UserData) {
+                            return Err(Error::InvalidInput(
+                                "raw exchange requires a job or user-data request",
+                            ));
+                        }
+                        self.session()
+                            .await
+                            .transact(|reference| Ok(Pdu { reference, ..job }))
+                            .await?
+                            .encode()
+                    })
+                    .await
+            })
             .await
-            .transact(|reference| Ok(Pdu { reference, ..job }))
-            .await?
-            .encode()
     }
     /// Acquire one async operation guard without blocking an executor thread.
     async fn session(&self) -> MutexGuard<'_, Session> {
         self.inner.lock().await
+    }
+}
+
+impl AsyncClient {
+    /// Snapshot logical operation counts, last timing/error, and callback failures.
+    pub fn operation_stats(&self) -> crate::observability::OperationStats {
+        self.observer.stats()
     }
 }

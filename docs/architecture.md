@@ -173,7 +173,7 @@ TCP. Introduce optional capabilities only with their implementations:
 | `server`, `partner` | Optional emulator and peer transfer implementations |
 | `ppi`, `discovery` | Optional serial and DCP network adapters |
 | `tag-import` | Optional CSV/JSON/XML metadata parsers; address parsing stays lightweight |
-| `tracing` | Optional structured event adapter; applications own subscriber setup |
+| `tracing` (future adapter) | Core operation hooks and JSON events are implemented without a logging dependency; applications own sinks |
 | `cli`, `demo` | Optional binaries/host metrics, depending on required library capabilities |
 
 LOGO!, tag parsing, and DB layout helpers can reuse the core without a runtime

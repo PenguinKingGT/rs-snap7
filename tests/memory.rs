@@ -572,3 +572,87 @@ async fn async_merged_read_error_fallback() {
     client.disconnect().await.unwrap();
     peer.worker.join().unwrap();
 }
+
+/// Nested typed/raw calls emit one event, with callbacks outside the session guard.
+#[test]
+fn logical_operation_events_are_once_and_reentrant() {
+    use rs_snap7::observability::OperationHook;
+    let peer = Peer::new(None, None);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let current: Arc<Mutex<Option<Client>>> = Arc::new(Mutex::new(None));
+    let sink = Arc::clone(&events);
+    let holder = Arc::clone(&current);
+    let mut config = ClientConfig::new(peer.endpoint, 0, 1).unwrap();
+    config.operation_hook = OperationHook::new(move |event| {
+        if let Some(client) = holder.lock().unwrap().as_ref() {
+            // A session probe would deadlock if the operation retained its guard.
+            if event.operation != "disconnect" {
+                assert_eq!(client.pdu_length().unwrap(), 128);
+            }
+        }
+        sink.lock().unwrap().push(event);
+    });
+    let client = Client::connect(config).unwrap();
+    *current.lock().unwrap() = Some(client.clone());
+    client.db_write_int(1, 0, 42).unwrap();
+    assert_eq!(client.db_read_int(1, 0).unwrap(), 42);
+    assert!(client.db_write_string(1, 0, "long", 1).is_err());
+    assert!(client.db_read(1, 2000, 1).is_err());
+    let stats = client.operation_stats();
+    assert_eq!(stats.completed, 5);
+    assert_eq!(stats.failed, 2);
+    assert_eq!(stats.hook_panics, 0);
+    assert_eq!(stats.last.unwrap().error_code, Some(5));
+    assert_eq!(
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|e| e.operation)
+            .collect::<Vec<_>>(),
+        [
+            "connect",
+            "db_write_int",
+            "db_read_int",
+            "db_write_string",
+            "db_read"
+        ]
+    );
+    client.disconnect().unwrap();
+    *current.lock().unwrap() = None;
+    peer.worker.join().unwrap();
+}
+
+/// Future-local nesting does not mix operation events from concurrently joined calls.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_logical_events_are_not_duplicated_by_nested_calls() {
+    use rs_snap7::observability::OperationHook;
+    let peer = Peer::new(None, None);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&events);
+    let mut config = ClientConfig::new(peer.endpoint, 0, 1).unwrap();
+    config.operation_hook = OperationHook::new(move |event| {
+        sink.lock().unwrap().push(event);
+    });
+    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let (a, b) = tokio::join!(
+        client.db_write_bool(1, 0, 0, true),
+        client.db_write_bool(1, 0, 1, true)
+    );
+    a.unwrap();
+    b.unwrap();
+    assert_eq!(client.operation_stats().completed, 3);
+    assert_eq!(
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|e| e.operation)
+            .collect::<Vec<_>>(),
+        ["connect", "db_write_bool", "db_write_bool"]
+    );
+    assert_eq!(client.db_read_byte(1, 0).await.unwrap(), 3);
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}

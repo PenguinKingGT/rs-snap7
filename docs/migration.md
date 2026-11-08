@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **16 of 28 migration features are Done.**
+The Rust library scaffold is complete. **17 of 28 migration features are Done.**
 Foundation types, codecs, transport, protocol, client sessions, and raw memory operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -42,7 +42,7 @@ Start here; later groups build on these capabilities.
 | F11 | Connection recovery: bounded retries, exponential backoff/jitter, heartbeat, and disconnect/reconnect hooks | `snap7/client.py` | Todo |
 | F12 | Native asynchronous client with supported operation parity, serialized/concurrent request handling, and cleanup | `snap7/async_client.py` | Done — [native async client](../src/async_client/mod.rs), [cancellation tests](../tests/async_client.rs), sync/async parity scenarios in `tests/` |
 | F13 | Request limiting: fixed spacing/token bucket, bursts, blocking/rejection, sync/async integration | `snap7/rate_limiter.py` | Done — [policies](../src/policy.rs), [wire tests](../tests/rate_limit.rs); fake-time algorithm tests colocated with implementation |
-| F14 | Contextual/structured logging, operation timing/hooks, execution time, and last-error reporting | `snap7/log.py`, `client.py`, `client_base.py` | Todo |
+| F14 | Contextual/structured logging, operation timing/hooks, execution time, and last-error reporting | `snap7/log.py`, `client.py`, `client_base.py` | Done — [events/statistics](../src/observability.rs), [hook tests](../tests/memory.rs); callback/JSON unit tests colocated |
 | F15 | CPU/CP/order/protection information, CPU state, SZL lists, fragmented SZL reads, and diagnostic buffer | `snap7/szl.py`, `client.py`, `s7protocol.py` | Done — [SZL models](../src/szl.rs), [diagnostics](../src/client/diagnostics.rs), [tests](../tests/diagnostics.rs) |
 | F16 | PLC stop/hot/cold start, clock read/write, compression, and RAM-to-ROM copy | `snap7/client.py`, `s7protocol.py` | Done — [management](../src/client/management.rs), [wire codecs](../src/protocol/management.rs), [tests](../tests/management.rs) |
 | F17 | Block listing/metadata, offline block inspection, upload/full upload, download, and deletion | `snap7/client.py`, `client_base.py`, `s7protocol.py` | In progress — DB metadata sizing implemented for F07; remaining block services pending |

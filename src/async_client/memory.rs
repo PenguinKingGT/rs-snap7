@@ -109,7 +109,11 @@ impl AsyncClient {
         start: u32,
         count: usize,
     ) -> Result<Vec<u8>> {
-        self.session().await.read_area(area, db, start, count).await
+        self.observer
+            .run_async("read_area", async {
+                self.session().await.read_area(area, db, start, count).await
+            })
+            .await
     }
 
     /// Write raw area data. Timer/counter payloads require complete 16-bit elements.
@@ -121,42 +125,62 @@ impl AsyncClient {
         start: u32,
         data: &[u8],
     ) -> Result<()> {
-        self.session().await.write_area(area, db, start, data).await
+        self.observer
+            .run_async("write_area", async {
+                self.session().await.write_area(area, db, start, data).await
+            })
+            .await
     }
 
     /// Read bytes from a data block.
     pub async fn db_read(&self, db: u16, start: u32, size: usize) -> Result<Vec<u8>> {
-        self.read_area(crate::Area::Db, db, start, size).await
+        self.observer
+            .run_async("db_read", async {
+                self.read_area(crate::Area::Db, db, start, size).await
+            })
+            .await
     }
 
     /// Write bytes to a data block; acknowledged/uncertain progress is retained in errors.
     pub async fn db_write(&self, db: u16, start: u32, data: &[u8]) -> Result<()> {
-        self.write_area(crate::Area::Db, db, start, data).await
+        self.observer
+            .run_async("db_write", async {
+                self.write_area(crate::Area::Db, db, start, data).await
+            })
+            .await
     }
 
     /// Read an entire DB. Supply its size for PLCs with unreliable block metadata;
     /// `None` queries MC7 size, falling back to 65536 only for a reported zero size.
     pub async fn db_get(&self, db: u16, size: Option<usize>) -> Result<Vec<u8>> {
-        let mut session = self.session().await;
-        let size = match size {
-            Some(size) => size,
-            None => session.db_size(db).await?,
-        };
-        session.read_area(crate::Area::Db, db, 0, size).await
+        self.observer
+            .run_async("db_get", async {
+                let mut session = self.session().await;
+                let size = match size {
+                    Some(size) => size,
+                    None => session.db_size(db).await?,
+                };
+                session.read_area(crate::Area::Db, db, 0, size).await
+            })
+            .await
     }
 
     /// Fill a whole DB with one byte; `None` determines its size from block metadata.
     pub async fn db_fill(&self, db: u16, filler: u8, size: Option<usize>) -> Result<()> {
-        let mut session = self.session().await;
-        let size = match size {
-            Some(size) => size,
-            None => session.db_size(db).await?,
-        };
-        if size > 0x20_0000 {
-            return Err(Error::InvalidInput("DB exceeds address space"));
-        }
-        session
-            .write_area(crate::Area::Db, db, 0, &vec![filler; size])
+        self.observer
+            .run_async("db_fill", async {
+                let mut session = self.session().await;
+                let size = match size {
+                    Some(size) => size,
+                    None => session.db_size(db).await?,
+                };
+                if size > 0x20_0000 {
+                    return Err(Error::InvalidInput("DB exceeds address space"));
+                }
+                session
+                    .write_area(crate::Area::Db, db, 0, &vec![filler; size])
+                    .await
+            })
             .await
     }
 }
@@ -164,54 +188,94 @@ impl AsyncClient {
 impl AsyncClient {
     /// Read outputs; counts use the area's natural element units.
     pub async fn ab_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
-        self.read_area(crate::Area::Outputs, 0, start, count).await
+        self.observer
+            .run_async("ab_read", async {
+                self.read_area(crate::Area::Outputs, 0, start, count).await
+            })
+            .await
     }
     /// Write outputs; payload bytes must contain complete elements.
     pub async fn ab_write(&self, start: u32, data: &[u8]) -> Result<()> {
-        self.write_area(crate::Area::Outputs, 0, start, data).await
+        self.observer
+            .run_async("ab_write", async {
+                self.write_area(crate::Area::Outputs, 0, start, data).await
+            })
+            .await
     }
 }
 
 impl AsyncClient {
     /// Read inputs; counts use the area's natural element units.
     pub async fn eb_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
-        self.read_area(crate::Area::Inputs, 0, start, count).await
+        self.observer
+            .run_async("eb_read", async {
+                self.read_area(crate::Area::Inputs, 0, start, count).await
+            })
+            .await
     }
     /// Write inputs; payload bytes must contain complete elements.
     pub async fn eb_write(&self, start: u32, data: &[u8]) -> Result<()> {
-        self.write_area(crate::Area::Inputs, 0, start, data).await
+        self.observer
+            .run_async("eb_write", async {
+                self.write_area(crate::Area::Inputs, 0, start, data).await
+            })
+            .await
     }
 }
 
 impl AsyncClient {
     /// Read markers; counts use the area's natural element units.
     pub async fn mb_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
-        self.read_area(crate::Area::Markers, 0, start, count).await
+        self.observer
+            .run_async("mb_read", async {
+                self.read_area(crate::Area::Markers, 0, start, count).await
+            })
+            .await
     }
     /// Write markers; payload bytes must contain complete elements.
     pub async fn mb_write(&self, start: u32, data: &[u8]) -> Result<()> {
-        self.write_area(crate::Area::Markers, 0, start, data).await
+        self.observer
+            .run_async("mb_write", async {
+                self.write_area(crate::Area::Markers, 0, start, data).await
+            })
+            .await
     }
 }
 
 impl AsyncClient {
     /// Read timer elements; counts use the area's natural element units.
     pub async fn tm_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
-        self.read_area(crate::Area::Timers, 0, start, count).await
+        self.observer
+            .run_async("tm_read", async {
+                self.read_area(crate::Area::Timers, 0, start, count).await
+            })
+            .await
     }
     /// Write timer elements; payload bytes must contain complete elements.
     pub async fn tm_write(&self, start: u32, data: &[u8]) -> Result<()> {
-        self.write_area(crate::Area::Timers, 0, start, data).await
+        self.observer
+            .run_async("tm_write", async {
+                self.write_area(crate::Area::Timers, 0, start, data).await
+            })
+            .await
     }
 }
 
 impl AsyncClient {
     /// Read counter elements; counts use the area's natural element units.
     pub async fn ct_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
-        self.read_area(crate::Area::Counters, 0, start, count).await
+        self.observer
+            .run_async("ct_read", async {
+                self.read_area(crate::Area::Counters, 0, start, count).await
+            })
+            .await
     }
     /// Write counter elements; payload bytes must contain complete elements.
     pub async fn ct_write(&self, start: u32, data: &[u8]) -> Result<()> {
-        self.write_area(crate::Area::Counters, 0, start, data).await
+        self.observer
+            .run_async("ct_write", async {
+                self.write_area(crate::Area::Counters, 0, start, data).await
+            })
+            .await
     }
 }

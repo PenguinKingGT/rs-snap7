@@ -79,3 +79,10 @@ and failure behavior. No PLC hardware has been validated yet.
   valid neighbors retain independent results. Plans are cached per layout/PDU.
   Parallel reads use explicitly independent sessions in bounded pools; clones
   of one session cannot be added as separate workers.
+
+- `OperationHook` receives one redacted event per completed logical operation,
+  including nested typed conveniences. `operation_stats()` exposes last elapsed
+  time, error kind/code, and counters without taking the network lock. Hooks run
+  after session guards are released; hook panics are isolated and counted.
+  JSON records are opt-in application sinks; the library sets up no global logger.
+  Cancelled async futures have no completion event because no result was returned.
