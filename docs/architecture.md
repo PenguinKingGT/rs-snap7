@@ -86,8 +86,10 @@ Discovery remains independent of classic S7 communication.
   with raw read/write operations; typed/tag conveniences reuse the same workflows.
 - Blocking and async adapters share pure request builders, response decoders,
   chunk/read plans, and multi-step operation state. Only I/O, waiting, and lock
-  acquisition differ. Introduce a private multi-step state machine when upload,
-  download, or SZL continuation requires it, rather than duplicating workflows.
+  acquisition differ. The implemented block `Transfer` state machines produce exchange/receive/send
+  actions; both drivers execute them under a guard that invalidates started
+  transfers on failure or cancellation. Unsolicited PLC download jobs retain
+  their own references. SZL collection remains separately bounded.
 - Keep a small internal transport seam for production TCP and scripted test
   adapters. Blocking and async seams may differ; do not publish a universal
   transport trait or force one runtime model onto both. Public clients construct

@@ -98,3 +98,21 @@ and failure behavior. No PLC hardware has been validated yet.
   prevents background reconnection; dropping the last clone wakes/aborts its
   worker. Loss/recovery hooks run outside session locks and isolate sink panics.
   Completed async operation hooks use boxed future scopes to bound stack growth.
+
+- Block catalogs collect bounded USERDATA continuations before decoding complete
+  entries. Remote block metadata is checked against the requested type/number;
+  DB sizing reuses the same parser. Zero block-list limits send no requests.
+- `upload` returns DB bytes without the first 36 compact-header bytes;
+  `full_upload` returns the complete Vec, whose length replaces Python's redundant
+  size tuple. The advertised complete upload length is enforced. Downloads are
+  DB-only as in the baseline, accept an explicit or header-derived number, and
+  reject short implicit-number input instead of silently choosing DB1.
+- Upload/download/catalog state machines share one deadline, limiter accounting,
+  and session across blocking/async drivers. Started failed transfers close the
+  connection; unsent permit rejection preserves it. Downloads echo PLC job
+  references, enforce a 1000-slice budget before offering, and never replay.
+  Cancellation between exchanges also invalidates an active async transfer.
+- Offline `CompactBlockInfo::decode` reports actual version-1 compact header
+  fields (including load size at offset 8 and MC7 size at offset 34), retaining
+  raw timestamp bytes. It deliberately replaces the Python helper's inconsistent
+  field offsets and hard-coded dates rather than reproducing invented metadata.

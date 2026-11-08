@@ -11,7 +11,7 @@ coverage and remaining acceptance work.
 
 Blocking and optional native asynchronous clients support classic S7 connections, raw and typed memory
 operations, DB helpers, multi-variable reads/writes, recovery, limits, events, and PLC
-diagnostic/control services. Hardware validation is
+diagnostic/control services, and block catalog/upload/download operations. Hardware validation is
 still pending; consult the tracker for remaining capabilities. The package is named `rs-snap7`, its Rust crate name is
 `rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
 attribution. Publishing is currently disabled.

@@ -1,5 +1,7 @@
 //! Exclusive session state and correlated blocking transaction execution.
 
+mod transfer;
+
 use crate::client::ClientConfig;
 use crate::protocol::{self, Negotiated, Pdu};
 use crate::transport::Connection;
@@ -124,19 +126,7 @@ impl Session {
         if request.len() > usize::from(self.limits.pdu_length) {
             return Err(Error::InvalidInput("request exceeds negotiated PDU"));
         }
-        loop {
-            if Instant::now() >= deadline {
-                return Err(Error::DeadlineBeforeSend);
-            }
-            let wait = self.limiter.poll(self.origin.elapsed())?;
-            if wait.is_zero() {
-                break;
-            }
-            if wait >= deadline.saturating_duration_since(Instant::now()) {
-                return Err(Error::DeadlineBeforeSend);
-            }
-            std::thread::sleep(wait);
-        }
+        self.acquire_permit(deadline)?;
         self.reference = next;
         if let Err(error) = self.connection.send_until(&request, deadline) {
             self.lost();
@@ -307,5 +297,22 @@ impl Session {
                 .push(crate::policy::ConnectionEvent::Disconnected);
         }
         self.connection.abort();
+    }
+    /// Charge one wire send against the current session's limiter and total deadline.
+    fn acquire_permit(&mut self, deadline: Instant) -> Result<()> {
+        loop {
+            if Instant::now() >= deadline {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            let wait = self.limiter.poll(self.origin.elapsed())?;
+            if wait.is_zero() {
+                break;
+            }
+            if wait >= deadline.saturating_duration_since(Instant::now()) {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            std::thread::sleep(wait);
+        }
+        Ok(())
     }
 }

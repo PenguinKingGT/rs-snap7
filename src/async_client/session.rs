@@ -1,5 +1,7 @@
 //! Async transaction state with cancellation-safe socket ownership.
 
+mod transfer;
+
 use super::transport::AsyncConnection;
 use crate::{
     ClientConfig, Error, Result,
@@ -131,19 +133,7 @@ impl Session {
         if bytes.len() > usize::from(self.limits.pdu_length) {
             return Err(Error::InvalidInput("request exceeds negotiated PDU"));
         }
-        loop {
-            if Instant::now() >= deadline {
-                return Err(Error::DeadlineBeforeSend);
-            }
-            let wait = self.limiter.poll(self.origin.elapsed())?;
-            if wait.is_zero() {
-                break;
-            }
-            if wait >= deadline.saturating_duration_since(Instant::now()) {
-                return Err(Error::DeadlineBeforeSend);
-            }
-            tokio::time::sleep(wait).await;
-        }
+        self.acquire_permit(deadline).await?;
         self.reference = next;
         let mut connection = self.connection.take().ok_or(Error::Disconnected)?;
         let result = async {
@@ -319,6 +309,23 @@ impl Session {
         let reply = self.validate(protocol::parse_userdata(&response, 4, 1, false))?;
         if reply.payload.len() < 4 || reply.payload[..4] != [4, 0x24, 0, 0] {
             return self.validate(Err(Error::Protocol("heartbeat SZL identity mismatch")));
+        }
+        Ok(())
+    }
+    /// Charge one wire send against the current session's limiter and total deadline.
+    async fn acquire_permit(&mut self, deadline: Instant) -> Result<()> {
+        loop {
+            if Instant::now() >= deadline {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            let wait = self.limiter.poll(self.origin.elapsed())?;
+            if wait.is_zero() {
+                break;
+            }
+            if wait >= deadline.saturating_duration_since(Instant::now()) {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            tokio::time::sleep(wait).await;
         }
         Ok(())
     }

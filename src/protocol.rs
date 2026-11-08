@@ -3,6 +3,7 @@
 //! Wire layouts follow the pinned python-snap7 implementation. No function in
 //! this module opens sockets or changes session state.
 
+pub mod blocks;
 pub mod management;
 
 use crate::{Address, Error, Result, WordLen};

@@ -1,6 +1,7 @@
 //! Blocking client configuration and public operation entry points.
 
 mod batch;
+pub(crate) mod blocks;
 mod diagnostics;
 mod force;
 mod heartbeat;

@@ -153,7 +153,7 @@ impl TryFrom<u8> for Parameter {
 }
 
 /// PLC block type identifiers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum BlockType {
     /// Organization block.

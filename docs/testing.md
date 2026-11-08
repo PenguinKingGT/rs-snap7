@@ -31,6 +31,7 @@ dependency; enabling `async` exercises native Tokio socket paths as well.
 | Read optimization | `src/planner.rs` tests and `tests/pool.rs`: sort/merge/extraction, errors isolated after merging, cached layout keys, independent parallel sessions |
 | Recovery/lifecycle | `tests/recovery.rs`: bounded reconnect, smaller-PDU replanning, unreplayed writes, retained LOGO TSAPs, heartbeat and explicit shutdown |
 | Async cancellation | `tests/async_client.rs`: cancelled transmitted requests close sockets; silent peers yield executor time and expire |
+| Block services | `tests/blocks.rs` and shared machine tests: pinned wire vectors, split catalogs, offline metadata, complete upload/download stages, PLC references, limits, refusal versus ambiguity, timeout and between-exchange cancellation |
 | Management/diagnostics | `tests/management.rs`, `diagnostics.rs`, `security.rs`: PI vectors, clock layouts, SZL continuation, firmware priority, password vectors/errors, force records |
 | Limits/events | `src/policy.rs`, `observability.rs` tests and integration scenarios: fake time, bursts, deadlines before sending, one logical event, reentrant/failed hooks, JSON escaping |
 

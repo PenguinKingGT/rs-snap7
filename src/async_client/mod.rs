@@ -16,6 +16,7 @@
 //! ```
 
 mod batch;
+mod blocks;
 mod diagnostics;
 mod force;
 mod heartbeat;

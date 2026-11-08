@@ -156,20 +156,7 @@ impl Session {
 
     /// Obtain a DB's MC7 size from the upstream 78-byte block-info layout.
     pub(crate) fn db_size(&mut self, db: u16) -> Result<usize> {
-        let mut payload = vec![0x30, 0x41];
-        payload.extend_from_slice(format!("{db:05}").as_bytes());
-        payload.push(b'A');
-        let response =
-            self.transact(|reference| protocol::userdata_request(reference, 3, 3, Some(&payload)))?;
-        let info = self.validate(protocol::parse_userdata(&response, 3, 3, false))?;
-        if info.more
-            || info.payload.len() != 78
-            || u16::from_be_bytes([info.payload[12], info.payload[13]]) != db
-            || info.payload[1] != 0x41
-        {
-            return self.validate(Err(Error::Protocol("invalid DB block-info response")));
-        }
-        let size = usize::from(u16::from_be_bytes([info.payload[40], info.payload[41]]));
+        let size = usize::from(self.block_info(crate::BlockType::Db, db)?.mc7_size);
         Ok(if size == 0 { 65536 } else { size })
     }
 }
