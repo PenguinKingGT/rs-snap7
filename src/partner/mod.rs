@@ -377,7 +377,6 @@ impl Partner {
 
     /// Run blocking Partner sending on Tokio's blocking pool.
     /// Cancellation detaches the task; an already started send continues to completion.
-    #[cfg(feature = "async")]
     pub async fn send_async(&self, r_id: u32, data: Vec<u8>) -> Result<()> {
         let partner = self.clone();
         tokio::task::spawn_blocking(move || partner.send(r_id, &data))
@@ -385,7 +384,6 @@ impl Partner {
             .map_err(|_| Error::Disconnected)?
     }
     /// Wait on Tokio's blocking pool; cancellation detaches a bounded receive wait.
-    #[cfg(feature = "async")]
     pub async fn receive_async(&self, timeout: Duration) -> Result<Transfer> {
         let partner = self.clone();
         tokio::task::spawn_blocking(move || partner.receive(timeout))

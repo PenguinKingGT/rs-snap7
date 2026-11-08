@@ -1,7 +1,7 @@
 //! Block catalog, upload/download, deletion, and offline inspection entry points.
 
 use super::AsyncClient;
-use crate::client::blocks::download_number;
+use crate::blocks::download_number;
 use crate::{
     BlockType, Result,
     blocks::{

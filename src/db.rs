@@ -387,7 +387,6 @@ impl Db {
     }
 }
 
-#[cfg(feature = "async")]
 impl Db {
     /// Refresh an entire row. Pending local changes in that row are discarded.
     pub async fn read_row_async(&mut self, client: &crate::AsyncClient, row: usize) -> Result<()> {

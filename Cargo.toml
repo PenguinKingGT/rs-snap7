@@ -16,14 +16,15 @@ serde = { version = "1.0.229", optional = true }
 serde_json = { version = "1.0.154", optional = true }
 serialport = { version = "4.10.1", default-features = false, optional = true }
 sysinfo = { version = "0.40.1", default-features = false, features = ["system", "disk", "network", "component"], optional = true }
-tokio = { version = "1", features = ["net", "time", "sync", "rt", "macros", "io-util"], optional = true }
+tokio = { version = "1", features = ["net", "time", "sync", "rt", "macros", "io-util"] }
 
 [lints.rust]
 missing_docs = "warn"
 unsafe_op_in_unsafe_fn = "deny"
 
 [features]
-async = ["dep:tokio"]
+async = []
+blocking = ["tokio/rt-multi-thread"]
 tag-import = ["dep:csv", "dep:serde_json", "dep:roxmltree", "dep:serde"]
 server = []
 partner = []

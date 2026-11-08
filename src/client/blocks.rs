@@ -1,8 +1,9 @@
 //! Block catalog, upload/download, deletion, and offline inspection entry points.
 
 use super::Client;
+use crate::blocks::download_number;
 use crate::{
-    BlockType, Error, Result,
+    BlockType, Result,
     blocks::{
         self, BlockEntry, BlockInfo, BlocksList,
         transfer::{Catalog, Download, Upload},
@@ -94,16 +95,5 @@ impl Client {
                 .and_then(|reply| session.validate(wire::check_ack(&reply, 0x28)));
             result.map_err(|error| crate::policy::mutation_failure(&job, error))
         })
-    }
-}
-
-/// Never silently choose DB1 when an offline header is too short to identify a block.
-pub(crate) fn download_number(data: &[u8], number: Option<u16>) -> Result<u16> {
-    match number {
-        Some(number) => Ok(number),
-        None if data.len() >= 8 => Ok(u16::from_be_bytes([data[6], data[7]])),
-        None => Err(Error::InvalidInput(
-            "download requires a block number or complete number field",
-        )),
     }
 }

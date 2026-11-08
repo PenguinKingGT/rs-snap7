@@ -101,7 +101,6 @@ thread_local! {
     static ACTIVE: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
 }
 
-#[cfg(feature = "async")]
 tokio::task_local! {
     /// Scope is restored per future poll, preventing leakage across joined futures.
     static ASYNC_ACTIVE: Vec<usize>;
@@ -139,7 +138,6 @@ impl Observer {
 
     /// Native async nesting uses future-local scopes; cancelled futures have no
     /// completion record because they did not return a result to their caller.
-    #[cfg(feature = "async")]
     pub(crate) fn run_async<T>(
         &self,
         name: &'static str,
@@ -172,7 +170,6 @@ impl Observer {
     }
 
     /// Whether an outer async operation still owns the current event scope.
-    #[cfg(feature = "async")]
     pub(crate) fn active_async(&self) -> bool {
         ASYNC_ACTIVE
             .try_with(|v| v.contains(&(self as *const Self as usize)))
