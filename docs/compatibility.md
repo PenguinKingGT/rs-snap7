@@ -133,3 +133,15 @@ JSON offsets must be strings to avoid floating-point bit-address rounding.
 Symbolic paths and browse metadata are retained but classic I/O rejects them.
 Tag batches preserve order and per-item errors through sequential tag reads;
 use read_multi_vars for optimized packet batching.
+
+## DB layouts
+
+DbConfig makes PLC start, row width, gap and writable prefix explicit. Layout
+offsets are exact decimal strings; distinct BOOL bits may share a byte, while
+overlapping fields and duplicate names are rejected. Snapshots own their buffers
+and baseline; no mutable Python-style row aliases are exposed. Identifier lookup
+uses current values, preventing stale indexes after edits. Selective row writes
+coalesce changed writable bytes and checkpoint acknowledged ranges. A failed
+range remains dirty conservatively. Field writes use tag semantics to preserve
+remote BOOL neighbors; row writes replace whole bytes. Refreshing a BOOL field
+refreshes its complete storage byte and discards local edits there.

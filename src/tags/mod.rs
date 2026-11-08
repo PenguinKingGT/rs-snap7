@@ -7,7 +7,9 @@ mod datatype;
 pub mod import;
 mod parse;
 mod value;
+
 pub use datatype::DataType;
+pub(crate) use parse::offset as parse_offset;
 pub use value::Value;
 
 use crate::{Area, Error, Result};

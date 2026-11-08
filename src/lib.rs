@@ -18,6 +18,7 @@
 pub mod blocks;
 pub mod client;
 pub mod codec;
+pub mod db;
 pub mod error;
 pub mod logo;
 pub mod observability;

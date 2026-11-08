@@ -716,3 +716,109 @@ async fn async_tag_io_matches_blocking_and_rejects_before_network() {
     client.disconnect().await.unwrap();
     peer.worker.join().unwrap();
 }
+
+#[test]
+fn db_rows_selective_fields_and_dirty_writes_match_remote_memory() {
+    use rs_snap7::{
+        Area,
+        db::{Db, DbConfig, Layout},
+        tags::Value,
+    };
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    let layout = Layout::parse("0 id INT\n2 flag BOOL\n2.7 other BOOL\n4 value REAL", 0).unwrap();
+    let mut db = Db::new(
+        DbConfig {
+            area: Area::Db,
+            db_number: 1,
+            start: 100,
+            row_size: 8,
+            row_gap: 2,
+            rows: 2,
+            writable_start: 2,
+        },
+        layout,
+        vec![0; 18],
+    )
+    .unwrap();
+    db.set(1, "value", &Value::Real(12.5)).unwrap();
+    db.write_row(&client, 1, true).unwrap();
+    assert!(db.unchanged(1).unwrap());
+    assert_eq!(client.db_read_real(1, 114).unwrap(), 12.5);
+    client.db_write(1, 102, &[0x80]).unwrap();
+    db.set(0, "flag", &Value::Bool(true)).unwrap();
+    db.write_fields(&client, 0, &["flag"]).unwrap();
+    assert_eq!(client.db_read(1, 102, 1).unwrap(), [0x81]);
+    assert!(db.write_fields(&client, 0, &["id"]).is_err());
+    db.read_fields(&client, 0, &["other"]).unwrap();
+    assert_eq!(db.get(0, "other").unwrap(), Value::Bool(true));
+    db.read_row(&client, 1).unwrap();
+    assert_eq!(db.get(1, "value").unwrap(), Value::Real(12.5));
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}
+
+#[test]
+fn db_failed_dirty_write_does_not_acknowledge_local_changes() {
+    use rs_snap7::{
+        Area,
+        db::{Db, DbConfig, Layout},
+        tags::Value,
+    };
+    let peer = Peer::new(Some(1), None);
+    let client = peer.client();
+    let mut db = Db::new(
+        DbConfig {
+            area: Area::Db,
+            db_number: 1,
+            start: 0,
+            row_size: 2,
+            row_gap: 0,
+            rows: 1,
+            writable_start: 0,
+        },
+        Layout::parse("0 value INT", 0).unwrap(),
+        vec![0; 2],
+    )
+    .unwrap();
+    db.set(0, "value", &Value::Signed(123)).unwrap();
+    assert!(db.write_row(&client, 0, true).is_err());
+    assert!(!db.unchanged(0).unwrap());
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}
+
+#[cfg(feature = "async")]
+#[tokio::test]
+async fn async_db_fields_and_rows_use_native_client() {
+    use rs_snap7::{
+        Area, AsyncClient,
+        db::{Db, DbConfig, Layout},
+        tags::Value,
+    };
+    let peer = Peer::new(None, None);
+    let client = AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let mut db = Db::new(
+        DbConfig {
+            area: Area::Db,
+            db_number: 1,
+            start: 0,
+            row_size: 4,
+            row_gap: 0,
+            rows: 1,
+            writable_start: 0,
+        },
+        Layout::parse("0 value REAL", 0).unwrap(),
+        vec![0; 4],
+    )
+    .unwrap();
+    db.set(0, "value", &Value::Real(3.5)).unwrap();
+    db.write_fields_async(&client, 0, &["value"]).await.unwrap();
+    db.read_row_async(&client, 0).await.unwrap();
+    assert!(db.unchanged(0).unwrap());
+    assert_eq!(db.get(0, "value").unwrap(), Value::Real(3.5));
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
