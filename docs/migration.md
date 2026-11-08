@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **2 of 28 migration features are Done.**
+The Rust library scaffold is complete. **3 of 28 migration features are Done.**
 Foundation types, errors, and scalar/text codecs are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -26,7 +26,7 @@ Start here; later groups build on these capabilities.
 | --- | --- | --- | --- |
 | F01 | Memory areas, word lengths, parameters, result types, and structured errors with protocol codes | `type.py`, `error.py`, `datatypes.py` in `snap7/` | Done — [types](../src/types.rs), [errors](../src/error.rs), [tests](../tests/types.rs) |
 | F02 | Byte codecs: bits, signed/unsigned integers, floats, characters, STRING/WSTRING, bounds and byte order | `snap7/util/getters.py`, `setters.py`, `datatypes.py` | Done — [codecs](../src/codec/mod.rs), [tests](../tests/codec.rs) |
-| F03 | Date/time codecs: S5TIME, TIME, DATE, TOD, DT, DTL, and long variants, preserving upstream read/write limits | `snap7/util/getters.py`, `setters.py` | Todo |
+| F03 | Date/time codecs: S5TIME, TIME, DATE, TOD, DT, DTL, and long variants, preserving upstream read/write limits | `snap7/util/getters.py`, `setters.py` | Done — [date/time codecs](../src/codec/datetime.rs), [tests](../tests/datetime.rs) |
 | F04 | TCP/TPKT/COTP transport: connection handshake, TSAPs, timeouts, framing, fragmentation, and disconnect | `snap7/connection.py` | Todo |
 | F05 | S7 PDU encoding/decoding, negotiation, request references, stale/lost response detection, and malformed-packet rejection | `snap7/s7protocol.py` | Todo |
 | F06 | Synchronous client lifecycle, connection parameters, rack/slot, routed connections, and raw ISO exchange | `snap7/client.py`, `client_base.py` | Todo |

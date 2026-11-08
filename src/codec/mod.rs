@@ -1,5 +1,7 @@
 //! Checked, big-endian S7 value codecs with explicit string encodings.
 
+pub mod datetime;
+
 use crate::{Error, Result};
 use std::ops::Range;
 
