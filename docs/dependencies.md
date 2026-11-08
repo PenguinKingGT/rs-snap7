@@ -5,7 +5,7 @@ versions for this repository. Source reuse attribution remains in LICENSE/NOTICE
 
 | Dependency | Feature | Declared SPDX/license expression |
 | --- | --- | --- |
-| tokio | async | MIT |
+| tokio | Core; blocking adds multi-thread runtime | MIT |
 | csv | tag-import | Unlicense / MIT |
 | serde, serde_json | tag-import; serde_json also cli | MIT OR Apache-2.0 |
 | roxmltree | tag-import | MIT OR Apache-2.0 |

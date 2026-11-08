@@ -9,7 +9,7 @@ The [architecture design](docs/architecture.md) describes module responsibilitie
 and implementation rules. See the [validation guide](docs/testing.md) for test
 coverage and remaining acceptance work.
 
-Blocking and optional native asynchronous clients support classic S7 connections, raw and typed memory
+The default asynchronous client and optional blocking adapters support classic S7 connections, raw and typed memory
 operations, DB helpers, multi-variable reads/writes, recovery, limits, events, and PLC
 diagnostic/control services, and block catalog/upload/download operations. Hardware validation is
 still pending; consult compatibility notes for explicit scope limits. The package is named `rs-snap7`, its Rust crate name is
@@ -47,35 +47,51 @@ explain complex logic, following `AGENTS.md`.
 Write comments and `AGENTS.md` in English. Keep the default README in English and
 update the Chinese translation alongside it.
 
-## Blocking Client Example
+## Async Client Example
 
 ```rust,no_run
 use rs_snap7::{Client, ClientConfig};
 
-fn main() -> rs_snap7::Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> rs_snap7::Result<()> {
     let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
-    let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?)?;
-    let value = client.db_read_int(1, 0)?;
+    let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
+    let value = client.db_read_int(1, 0).await?;
     println!("DB1.DBW0 = {value}");
-    client.disconnect()
+    client.disconnect().await
 }
 ```
 
 See [compatibility notes](docs/compatibility.md) for deliberate interface changes.
 
-## Native Async Support
+## Optional Blocking Access
 
-Enable the `async` Cargo feature to use `AsyncClient` with a Tokio runtime that
-has I/O and timers enabled. Its supported operation names match `Client`, with
-`.await` at each call. Test this configuration with:
+`Client`, `ClientPool`, and `Logo` use the native Tokio core by default, requiring
+I/O and timers. Enable `blocking` for `rs_snap7::blocking::{Client, ClientPool, Logo}`.
+Calls omit `.await` and share configuration/result types and the same protocol implementation.
 
-```sh
-cargo test --all-targets --all-features
-cargo test --doc --all-features
+```toml
+[dependencies]
+rs-snap7 = { path = ".", features = ["blocking"] }
 ```
 
-Cancelling a transmitted operation invalidates its connection. A cancelled write
-may already have executed on the PLC; reconnect explicitly before further work.
+Call blocking methods from ordinary threads outside any entered Tokio runtime.
+Tokio tasks, entered handles, and `spawn_blocking` contexts return
+`Error::BlockingInAsyncContext`. All blocking clients share one background runtime
+worker; heartbeats advance while callers are idle. Final clone drop releases the
+connection/tasks; the shared runtime remains until process exit.
+Blocking `is_connected()` returns `Result<bool>`.
+
+Foreground callbacks run on the calling thread after leaving the runtime and
+session locks, allowing metadata reentry. Background callbacks use an ordinary
+thread and a bounded queue (1024); overflow drops incoming events and increments
+`operation_stats().background_hook_events_dropped`. Keep callbacks short.
+DB async row/field methods are `read_row`, `write_row`, `read_fields`, `write_fields`;
+blocking calls use their `*_blocking` counterparts.
+
+Cancelling a transmitted async operation invalidates its connection. A cancelled
+write may already have executed on the PLC; reconnect explicitly before further work.
+See `examples/read_db.rs` and `examples/blocking_read.rs`.
 
 ## Data Tools and Optional Products
 
@@ -85,7 +101,7 @@ DB tools provide validated layouts, owned row snapshots, field lookup/export and
 
 Enable `server` for a bounded S7 emulator with registered/lockable memory, independent sessions, memory/block/clock/control services, configurable SZLs and event callbacks. It simulates protocol behavior; it does not execute PLC programs.
 
-Enable `partner` for active/passive bidirectional PBC transfers with R-IDs, ACK correlation, bounded queues, callbacks and statistics. With `async`, send/receive adapters use Tokio’s blocking pool; cancellation detaches an already started operation.
+Enable `partner` for active/passive bidirectional PBC transfers with R-IDs, ACK correlation, bounded queues, callbacks and statistics. `send_async`/`receive_async` adapters use Tokio’s blocking pool; cancellation detaches an already started operation.
 
 Enable `ppi` for experimental S7-200 single-master serial access (8E1): checked SD1/SD2/SD3 frames, bounded read retries, S7 negotiation and V/area reads/writes. Serial tests use injected ports and require no hardware.
 

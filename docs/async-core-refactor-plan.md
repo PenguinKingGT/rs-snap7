@@ -1,7 +1,7 @@
 # Async Core and Blocking Adapter Refactor Plan
 
-Status: **Proposed; implementation has not started.** This document describes a
-follow-up to the current [architecture](architecture.md), not current behavior.
+Status: **Implemented.** This document records the execution-model refactor
+and complements the current [architecture](architecture.md).
 It is informed by the [library research](rust-io-library-api-research.md).
 The project is unpublished, so the migration can make deliberate interface
 changes without keeping a permanent compatibility implementation.
@@ -100,8 +100,8 @@ idle heartbeat contract. This is documented in the
 
 Calling a blocking operation from an entered Tokio runtime returns a new explicit
 `Error::BlockingInAsyncContext` before network I/O or session mutation. Users in
-async code use `Client` or move necessary blocking work to an ordinary blocking
-context. Check the calling context before initializing/entering the adapter;
+async code use `Client` or an ordinary OS thread outside Tokio. The conservative
+context check also rejects `spawn_blocking`, whose threads enter a Tokio handle. Check the calling context before initializing/entering the adapter;
 do not rely on a nested-runtime panic. Pure codec and snapshot methods are not
 subject to this restriction.
 
@@ -158,7 +158,7 @@ background hook delivery can be asynchronous.
 | --- | --- |
 | `config` | Extract `ClientConfig`; keep validation free of network I/O |
 | `client` | Promote the current native async client and operation modules |
-| `session` | Keep one async session/transfer driver; remove the blocking duplicate |
+| `client::session` | Keep one async session/transfer driver; remove the blocking duplicate |
 | `transport` | Separate shared configuration/framing, Tokio transport and the explicit blocking raw adapter required by optional products |
 | `operations` / planner | Retain pure chunk/read planning; move execution to the single session implementation |
 | `blocking` | Client/pool/LOGO adapters, shared runtime and hook-delivery adaptation; no S7 packet/retry logic |
@@ -219,5 +219,17 @@ allowed only while the replacement is being verified; remove it before completio
 - Updated examples and both Python interoperability directions. Real hardware
   acceptance remains explicitly opt-in and is reported separately.
 
-The current implementation remains unchanged. Completion requires replacing the
-legacy execution paths and passing the gates above.
+## 8. Delivery Record
+
+- S1: Baseline all-feature tests passed before execution-path removal.
+- S2: `1f0f75e` extracted configuration and enabled the async core unconditionally.
+- S3: `93757e` introduced the shared-runtime blocking facade and hook adaptation.
+- S4: `4c9603e` switched public names, removed the old session/client drivers,
+  and migrated DB/LOGO/pools, raw transport, CLI, examples, and acceptance callers.
+- S5: Documentation, the blocking example, and CI matrices describe the new API.
+  Validation results are recorded in [testing.md](testing.md).
+
+The hardware harness intentionally uses optional `blocking` so its panic-safe
+fixture restoration remains synchronous. Software acceptance tests exercise
+native async and blocking behavior, including Python peers in both directions.
+No physical PLC, live PPI/DCP, or remote CI pass is claimed.

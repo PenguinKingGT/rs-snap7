@@ -29,8 +29,8 @@ Start here; later groups build on these capabilities.
 | F03 | Date/time codecs: S5TIME, TIME, DATE, TOD, DT, DTL, and long variants, preserving upstream read/write limits | `snap7/util/getters.py`, `setters.py` | Done — [date/time codecs](../src/codec/datetime.rs), [tests](../tests/datetime.rs) |
 | F04 | TCP/TPKT/COTP transport: connection handshake, TSAPs, timeouts, framing, fragmentation, and disconnect | `snap7/connection.py` | Done — [transport](../src/transport.rs), [tests](../tests/transport.rs) |
 | F05 | S7 PDU encoding/decoding, negotiation, request references, stale/lost response detection, and malformed-packet rejection | `snap7/s7protocol.py` | Done — [protocol](../src/protocol.rs), [tests](../tests/protocol.rs) |
-| F06 | Synchronous client lifecycle, connection parameters, rack/slot, routed connections, and raw ISO exchange | `snap7/client.py`, `client_base.py` | Done — [client](../src/client.rs), [session](../src/session.rs), [tests](../tests/client.rs) |
-| F07 | Raw DB/area reads and writes, DB get/fill, I/O/marker/timer/counter helpers, and large-transfer chunking | `snap7/client.py` | Done — [operations](../src/operations.rs), [client](../src/client.rs), [tests](../tests/memory.rs) |
+| F06 | Async-first client lifecycle with optional blocking adapters, connection parameters, rack/slot, routed connections, and raw ISO exchange | `snap7/client.py`, `client_base.py` | Done — [client](../src/client/mod.rs), [session](../src/client/session.rs), [tests](../tests/client.rs) |
+| F07 | Raw DB/area reads and writes, DB get/fill, I/O/marker/timer/counter helpers, and large-transfer chunking | `snap7/client.py` | Done — [operations](../src/operations.rs), [client](../src/client/mod.rs), [tests](../tests/memory.rs) |
 | F08 | Typed scalar and array DB reads/writes, including bit-preserving updates | `snap7/client.py`, `async_client.py` | Done — [typed operations](../src/client/typed.rs), [tests](../tests/memory.rs); blocking and async exposure implemented in F12 |
 | F09 | Multi-variable reads/writes, item limits, PDU splitting, and per-item errors | `snap7/client.py`, `s7protocol.py` | Done — [batch operations](../src/client/batch.rs), [packet planner](../src/planner.rs), [tests](../tests/memory.rs) |
 
@@ -38,14 +38,14 @@ Start here; later groups build on these capabilities.
 
 | ID | Feature to implement | Upstream reference | Status |
 | --- | --- | --- | --- |
-| F10 | Read planning: sorting, merging, packetization, result extraction, plan caching, and parallel dispatch | `snap7/optimizer.py`, `client.py` | Done — [read planner](../src/planner.rs), [blocking pool](../src/pool.rs), [async pool](../src/async_client/pool.rs), [tests](../tests/pool.rs) |
+| F10 | Read planning: sorting, merging, packetization, result extraction, plan caching, and parallel dispatch | `snap7/optimizer.py`, `client.py` | Done — [read planner](../src/planner.rs), [async pool](../src/client/pool.rs), [blocking adapter](../src/blocking/mod.rs), [tests](../tests/pool.rs) |
 | F11 | Connection recovery: bounded retries, exponential backoff/jitter, heartbeat, and disconnect/reconnect hooks | `snap7/client.py` | Done — [recovery policies](../src/policy.rs), session/heartbeat adapters, [failure and lifecycle tests](../tests/recovery.rs) |
-| F12 | Native asynchronous client with supported operation parity, serialized/concurrent request handling, and cleanup | `snap7/async_client.py` | Done — [native async client](../src/async_client/mod.rs), [cancellation tests](../tests/async_client.rs), sync/async parity scenarios in `tests/` |
+| F12 | Default asynchronous client with optional blocking access, serialized/concurrent request handling, and cleanup | `snap7/async_client.py` | Done — [native async client](../src/client/mod.rs), [cancellation tests](../tests/async_client.rs), sync/async parity scenarios in `tests/` |
 | F13 | Request limiting: fixed spacing/token bucket, bursts, blocking/rejection, sync/async integration | `snap7/rate_limiter.py` | Done — [policies](../src/policy.rs), [wire tests](../tests/rate_limit.rs); fake-time algorithm tests colocated with implementation |
 | F14 | Contextual/structured logging, operation timing/hooks, execution time, and last-error reporting | `snap7/log.py`, `client.py`, `client_base.py` | Done — [events/statistics](../src/observability.rs), [hook tests](../tests/memory.rs); callback/JSON unit tests colocated |
 | F15 | CPU/CP/order/protection information, CPU state, SZL lists, fragmented SZL reads, and diagnostic buffer | `snap7/szl.py`, `client.py`, `s7protocol.py` | Done — [SZL models](../src/szl.rs), [diagnostics](../src/client/diagnostics.rs), [tests](../tests/diagnostics.rs) |
 | F16 | PLC stop/hot/cold start, clock read/write, compression, and RAM-to-ROM copy | `snap7/client.py`, `s7protocol.py` | Done — [management](../src/client/management.rs), [wire codecs](../src/protocol/management.rs), [tests](../tests/management.rs) |
-| F17 | Block listing/metadata, offline block inspection, upload/full upload, download, and deletion | `snap7/client.py`, `client_base.py`, `s7protocol.py` | Done — [block models/state machines](../src/blocks/mod.rs), [wire services](../src/protocol/blocks.rs), [blocking](../src/client/blocks.rs)/[async](../src/async_client/blocks.rs) adapters, [tests](../tests/blocks.rs) |
+| F17 | Block listing/metadata, offline block inspection, upload/full upload, download, and deletion | `snap7/client.py`, `client_base.py`, `s7protocol.py` | Done — [block models/state machines](../src/blocks/mod.rs), [wire services](../src/protocol/blocks.rs), [async workflow](../src/client/blocks.rs)/[blocking facade](../src/blocking/methods.rs), [tests](../tests/blocks.rs) |
 | F18 | Session password encoding, setting/clearing, and authentication errors | `snap7/client.py`, `s7protocol.py` | Done — [security](../src/client/security.rs), [tests](../tests/security.rs) |
 | F19 | I/O force-bit operations, cancellation, and force-table reads | `snap7/client.py`, `async_client.py` | Done — [I/O operations](../src/client/force.rs), [table parser](../src/szl.rs), [tests](../tests/memory.rs), [table tests](../tests/diagnostics.rs) |
 | F20 | Typed tags: PLC4X/STEP7 and nodeS7 syntax, strict parsing, read/write/batch reads, CSV/JSON/TIA XML imports, and browse-result conversion | `snap7/tags.py`, `client.py` | Done — [tags](../src/tags/mod.rs), [imports](../src/tags/import.rs), [tests](../tests/tags.rs) and sync/async I/O in memory tests |
@@ -77,3 +77,11 @@ Start here; later groups build on these capabilities.
   and full project backups. Tag metadata parsing does not provide symbolic access.
 - PPI remains single-master/single-slave; multimaster and PPI over TCP are outside
   this baseline. DCP discovery is a separate protocol, not S7 broadcast discovery.
+
+## Execution Model Refactor
+
+The [async-core plan](async-core-refactor-plan.md) is implemented: default
+`Client`/`ClientPool`/`Logo` are async; optional `blocking` delegates to the same
+session/transfer/recovery implementation. All 28 protocol feature statuses remain
+Done. Raw transport, DB helpers, CLI, examples, tests, and documentation use the
+new interfaces. Real hardware acceptance remains pending.

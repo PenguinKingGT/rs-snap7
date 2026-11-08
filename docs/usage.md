@@ -2,11 +2,11 @@
 
 ## Cargo Features
 
-The default library is blocking and runtime-independent. Features are additive:
+The default client and pool use Tokio, with I/O and timers enabled. Features are additive:
 
 | Feature | Capability |
 | --- | --- |
-| async | Native Tokio client and pool |
+| blocking | Synchronous client/pool/LOGO adapters over the async core |
 | tag-import | CSV/JSON/TIA XML text import |
 | server | Threaded emulator |
 | partner | Active/passive PBC transfers |
@@ -40,7 +40,8 @@ brackets, spaces and negative values. Calendar writes use the Rust library.
 ```sh
 cargo run --example emulator --features server
 cargo run --example read_db -- 127.0.0.1:1102 DB1:0:INT
-cargo run --example async_read --features async -- 127.0.0.1:1102
+cargo run --example async_read -- 127.0.0.1:1102
+cargo run --example blocking_read --features blocking -- 127.0.0.1:1102 DB1:0:INT
 ```
 
 Tag imports accept document text, keeping filesystem policy in the application:
@@ -67,3 +68,27 @@ DINT at 32 is host uptime seconds. Byte 36 bits 0/1/2 indicate overheating,
 high CPU load and busy disk. Byte 37 bit 0 indicates temperature availability.
 DB1 is read-only remotely; missing temperature/fan values are zero.
 DB2 is 64 bytes of writable control/demo storage.
+
+## Runtime and Data Helpers
+
+Use `rs_snap7::{Client, ClientPool, Logo}` with awaited network methods. Async
+`Db` operations accept `&Client` and borrow the owned snapshot across the await.
+Enable `blocking` for `rs_snap7::blocking::{Client, ClientPool, Logo}` and
+`Db::{read_row_blocking, write_row_blocking, read_fields_blocking, write_fields_blocking}`.
+These adapters preserve partial dirty-range progress in the original snapshot.
+The blocking runtime accepts borrowed futures and does not require scalar types
+to be `Send + 'static`.
+
+Blocking network calls require an ordinary thread outside any entered Tokio
+context, including `spawn_blocking`; misuse returns `BlockingInAsyncContext`.
+Use the default async API inside Tokio applications. Blocking clients share one
+process-lifetime runtime worker. Foreground hooks run on the caller after locks
+and runtime exit; background hooks use a bounded dispatcher, dropping incoming
+events on overflow and reporting per-client losses in operation statistics.
+
+Advanced raw COTP consumers use async `transport::Connection`.
+`transport::blocking::Connection` is available with `blocking`, `server`, or
+`partner` for explicit synchronous transport access. Server, Partner, serial PPI,
+and DCP retain their existing execution models. The CLI uses async client I/O and
+offloads service loops, host sampling, and discovery to blocking workers; `cli`
+does not enable `blocking`.

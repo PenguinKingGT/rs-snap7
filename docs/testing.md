@@ -9,14 +9,15 @@ cargo build --locked --all-features
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --no-default-features
+cargo test --locked --all-targets --features blocking
 cargo test --locked --all-targets --all-features
 cargo test --locked --doc --all-features
 ```
 
 Normal tests use ephemeral loopback TCP ports, independent wire peers, fixed
 vectors, and deterministic policy inputs. They require neither PLC hardware nor
-Python/the ignored upstream checkout. The default library has no async runtime
-dependency; enabling `async` exercises native Tokio socket paths as well.
+Python/the ignored upstream checkout. The default client uses native Tokio sockets;
+`blocking` tests the optional facade over the same core.
 
 ## Coverage by Behavior
 
@@ -90,10 +91,10 @@ export SNAP7_FIXTURE_DB=100
 export SNAP7_FIXTURE_START=0
 export SNAP7_FIXTURE_SIZE=16
 # Optional: SNAP7_PLC_RACK, SNAP7_PLC_SLOT, SNAP7_HARDWARE_REPORT
-cargo test --test hardware hardware_read -- --ignored --nocapture
+cargo test --features blocking --test hardware hardware_read -- --ignored --nocapture
 
 # Separate explicit mutation opt-in; original bytes are saved and restored.
-SNAP7_ALLOW_HARDWARE_WRITES=1 cargo test --test hardware hardware_fixture_write -- --ignored --nocapture
+SNAP7_ALLOW_HARDWARE_WRITES=1 cargo test --features blocking --test hardware hardware_fixture_write -- --ignored --nocapture
 ```
 
 Report records include observed CPU/order data, declared firmware/model, endpoint
@@ -104,7 +105,7 @@ harness deliberately does not infer permission to run these operations.
 
 ## CI
 
-[CI](../.github/workflows/ci.yml) configures default/all-feature tests on Linux,
+[CI](../.github/workflows/ci.yml) configures default/blocking/all-feature tests on Linux,
 Windows and macOS, plus formatting, strict Clippy and documentation checks.
 Individual feature compilation runs separately to catch accidental coupling.
 Remote matrix results require a pushed workflow run; local results are macOS.
@@ -118,12 +119,13 @@ On 2026-11-08, macOS with Rust 1.97.1 and Python 3.12:
 
 | Check | Result |
 | --- | --- |
-| Locked default/no-default all-target tests | 95 passed; 2 hardware tests ignored |
-| Locked all-feature all-target tests | 154 passed; 4 opt-in tests ignored |
-| All-feature doctests | 3 passed |
+| Locked default/no-default all-target tests | 101 passed; hardware harness requires blocking |
+| Locked blocking all-target tests | 152 passed; 2 hardware tests ignored |
+| Locked all-feature all-target tests | 190 passed; 4 opt-in tests ignored |
+| Default and all-feature doctests | 3 passed in each configuration |
 | Explicit pinned Python cross-peer tests | 2 passed, including download in both directions |
-| Individual async/tag-import/server/partner/ppi/discovery/cli/demo builds | All eight passed |
-| rustfmt, strict all-feature Clippy, rustdoc with warnings denied | Passed |
+| Individual blocking/tag-import/server/partner/ppi/discovery/cli/demo builds | All eight passed |
+| rustfmt; strict default/blocking/all-feature Clippy; rustdoc with warnings denied | Passed |
 
 The four all-feature opt-in tests are two Python peer tests and two real-PLC
 tests. Python tests were then run explicitly and passed. The two real-PLC tests
@@ -144,3 +146,16 @@ The following cases supplement the baseline suite:
 
 These regressions run without hardware; optional Python peer acceptance can be
 run separately using the command above.
+
+## Async Core Refactor Regressions
+
+`tests/async_transport.rs` covers raw async COTP fragmentation, malformed frames,
+timeouts, and cancellation invalidation without optional features.
+`tests/blocking.rs` covers runtime-context rejection, idle heartbeat progress,
+clone/final-drop lifetime, non-Send scalar values, caller-thread callback reentry,
+and pool task callback propagation. Private runtime/hook tests verify concurrent
+runtime reuse, entered blocking-pool rejection, bounded queue overflow accounting,
+late completion delivery, panic isolation, and a slow background sink that does
+not stall the reactor. Memory tests preserve DB dirty-state checkpoints after a
+later run fails. The hardware harness requires `blocking` to retain synchronous
+panic-safe fixture restoration.

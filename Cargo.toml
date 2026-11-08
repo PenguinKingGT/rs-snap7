@@ -39,3 +39,7 @@ pnet_datalink = { version = "0.35.0", optional = true }
 name = "s7"
 path = "src/bin/s7.rs"
 required-features = ["cli"]
+
+[[example]]
+name = "blocking_read"
+required-features = ["blocking"]

@@ -30,9 +30,9 @@ client execution and session coordination remain internal.
 | `codec` | Checked byte/value and date/time conversions, independent of I/O | F02–F03 |
 | `transport` | Blocking and async TCP adapters, TPKT framing, COTP handshake/reassembly | F04 |
 | `protocol` | S7 request/response encoding, validation, service messages, and reference checks | F05 |
-| `session` | Negotiated limits, connection state, request references, and transaction coordination | F06, F11–F12 |
-| `client` | Blocking `Client` and optional `AsyncClient`; configuration and operation entry points | F06–F09, F12 |
-| `operations` | Shared read/write, chunking, diagnostics, control, block, password, and force workflows | F07–F09, F15–F19 |
+| `client::session` | Negotiated limits, connection state, request references, and transaction coordination | F06, F11–F12 |
+| `config`, `client` | Default async `Client`; configuration and operation entry points | F06–F09, F12 |
+| `operations` | Pure chunk planning and write-result classification; async workflows live in `client` | F07–F09, F15–F19 |
 | `planner` | Multi-read merging, packet budgets, result mapping, cache, and dispatch plans | F10 |
 | `policy`, `observability` | Retry/heartbeat/limiter rules, operation events, and diagnostic reporting | F11, F13–F14 |
 | `tags`, `db` | Address dialects, metadata imports, typed tag access, and DB row/layout tools | F20–F21 |
@@ -73,10 +73,9 @@ Discovery remains independent of classic S7 communication.
 
 ## Public Interface & Execution
 
-- `Client` provides blocking connection, memory, and management operations.
-  `AsyncClient` provides native asynchronous counterparts with the same models,
-  validation rules, and supported behavior. Awaiting network I/O must not run
-  blocking socket calls on an async executor.
+- `Client`, `ClientPool`, and `Logo` provide native async operations by default.
+  Optional `blocking::{Client, ClientPool, Logo}` execute the same futures on a
+  shared continuously running Tokio runtime. No legacy client aliases remain.
 - A validated configuration holds endpoint, rack/slot or explicit TSAPs,
   routing, timeouts, requested PDU size, recovery, and rate limits. Establishing
   a connection returns a usable client or an error; reconnecting renegotiates
@@ -84,16 +83,15 @@ Discovery remains independent of classic S7 communication.
 - Use typed area/address/value models and `Result<T, Error>` rather than Python
   `ctypes`, numeric success sentinels, or caller-managed output buffers. Start
   with raw read/write operations; typed/tag conveniences reuse the same workflows.
-- Blocking and async adapters share pure request builders, response decoders,
-  chunk/read plans, and multi-step operation state. Only I/O, waiting, and lock
-  acquisition differ. The implemented block `Transfer` state machines produce exchange/receive/send
-  actions; both drivers execute them under a guard that invalidates started
-  transfers on failure or cancellation. Unsolicited PLC download jobs retain
-  their own references. SZL collection remains separately bounded.
-- Keep a small internal transport seam for production TCP and scripted test
-  adapters. Blocking and async seams may differ; do not publish a universal
-  transport trait or force one runtime model onto both. Public clients construct
-  production adapters; internal constructors allow dependency injection in tests.
+- One async session owns network I/O, waiting, serialization, limiting, recovery,
+  heartbeat, and transfer execution. Blocking adapters only borrow and run core
+  futures; generic scalar results need no `Send + 'static` bound.
+- Pure block state machines emit exchange/receive/send actions. One async driver
+  executes them with cancellation-safe socket ownership; started failures close
+  the transport. PLC download jobs retain their own references.
+- Raw `transport::Connection` is async. `transport::blocking::Connection` remains
+  explicit for optional server/Partner paths and advanced synchronous consumers;
+  both use shared pure framing/configuration validation.
 
 An ordinary read follows this sequence: validate address and size, calculate
 chunks from negotiated limits, acquire the session, apply request limiting,
@@ -109,11 +107,11 @@ leave a partially usable session.
 
 Initially permit one in-flight transaction per connection, including all
 exchanges of a multi-step operation. Concurrent callers serialize through a
-blocking or async session guard. Independent clients can operate concurrently.
+async session guard. Independent clients can operate concurrently.
 Do not promise parallel exchanges on one connection before implementing
 reference-based response dispatch and testing negotiated outstanding-job limits.
 
-F10 uses `ClientPool`/`AsyncClientPool` with bounded, independent sessions.
+F10 uses `ClientPool`/`blocking::ClientPool` with bounded, independent sessions.
 Single-connection pipelining remains later work and would require a
 dispatcher that routes responses to pending request references. A timeout
 or cancellation must remove pending state and prevent late replies being reused.
@@ -166,24 +164,30 @@ introducing symbolic PLC access or automatic layout discovery.
 
 ## Dependencies & Cargo Features
 
-Keep the default library blocking and runtime-independent, using `std::net` for
-TCP. Introduce optional capabilities only with their implementations:
+Tokio is required for the default async client; enable I/O and time in the
+application runtime. Optional capabilities remain additive:
 
 | Cargo feature | Purpose / dependency direction |
 | --- | --- |
-| `async` | Native async transport and coordination; Tokio is the proposed runtime |
-| `server`, `partner` | Optional emulator and peer transfer implementations |
-| `ppi`, `discovery` | Optional serial and DCP network adapters |
-| `tag-import` | Optional CSV/JSON/XML metadata parsers; address parsing stays lightweight |
-| `tracing` (future adapter) | Core operation hooks and JSON events are implemented without a logging dependency; applications own sinks |
-| `cli`, `demo` | Optional binaries/host metrics, depending on required library capabilities |
+| `blocking` | Thin synchronous adapters; adds Tokio multi-thread runtime support |
+| `server`, `partner` | Threaded emulator and independent peer transfers |
+| `ppi`, `discovery` | Serial and DCP network adapters |
+| `tag-import` | CSV/JSON/XML metadata parsers |
+| `cli`, `demo` | Async CLI and optional host metrics; no blocking-client dependency |
 
-LOGO!, tag parsing, and DB layout helpers can reuse the core without a runtime
-dependency. Select external crates and minimum supported Rust version when each
-capability is implemented, after checking licensing and platform support. The `async` feature is now configured with optional Tokio; the other listed features are implemented except the future tracing adapter. Tokio socket I/O and absolute timeouts follow its
-[transport](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html) and
-[timeout](https://docs.rs/tokio/latest/tokio/time/fn.timeout_at.html) interfaces. CI should eventually
-check default, no-default, all-compatible, and individual optional feature builds.
+The blocking runtime starts lazily, uses one background worker shared by all
+clients, and remains until process exit. Final client drop closes sockets and
+aborts heartbeat tasks. Calls reject any entered Tokio context before I/O,
+including Tokio's blocking pool. Pure codecs/layout/parsing remain independent
+of runtime execution even though the crate depends on Tokio.
+
+Blocking foreground hooks are captured per operation and drained after runtime
+exit, outside locks. Pool child tasks inherit capture; heartbeats do not. Late
+or background events enter a bounded 1024-event dispatcher queue on an ordinary
+thread. Incoming overflow increments the originating client's drop count.
+Reentrant dispatcher callbacks enqueue subsequent events rather than recursively
+invoking them. Application panics are isolated. See the implemented
+[refactor plan](async-core-refactor-plan.md) for ownership and acceptance details.
 
 ## Test Architecture & Delivery
 

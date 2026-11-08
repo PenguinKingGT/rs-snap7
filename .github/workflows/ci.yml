@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        feature-args: [--no-default-features, --all-features]
+        feature-args: [--no-default-features, "--features blocking", --all-features]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        feature: [async, tag-import, server, partner, ppi, discovery, cli, demo]
+        feature: [blocking, tag-import, server, partner, ppi, discovery, cli, demo]
     steps:
       - uses: actions/checkout@v7
         with:

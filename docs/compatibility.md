@@ -62,11 +62,14 @@ and failure behavior. No PLC hardware has been validated yet.
   delegates lifecycle/operations to its standard client. Automatic recovery now
   preserves these explicit TSAPs through fresh negotiations (F11/F23).
 
-- Native `AsyncClient` requires the optional `async` feature and a Tokio runtime
-  with I/O/time enabled. Supported blocking operations have asynchronous
-  counterparts, sharing codecs and packet planning. Dropping an in-flight
-  transaction future closes its socket; cancellation during a write has an
-  unknown remote outcome and must not be treated as a confirmed failure.
+- `Client`, `ClientPool`, and `Logo` are async by default and require Tokio I/O/time.
+  Optional `blocking` adapters run the same core. Blocking calls reject entered
+  Tokio contexts, including `spawn_blocking`, with `BlockingInAsyncContext`.
+  Blocking readiness returns `Result<bool>`; async readiness returns `bool`.
+  DB async method names have no `_async` suffix; synchronous adapters use
+  `_blocking`. The unpublished API retains no old aliases or `async` feature.
+  Dropping an in-flight transaction future closes its socket; cancellation during
+  a write has an unknown remote outcome.
 
 - Request limits count S7 negotiation, continuation, and application jobs per
   session; COTP frames are not independently charged. Fixed and token-bucket
@@ -108,7 +111,7 @@ and failure behavior. No PLC hardware has been validated yet.
   DB-only as in the baseline, accept an explicit or header-derived number, and
   reject short implicit-number input instead of silently choosing DB1.
 - Upload/download/catalog state machines share one deadline, limiter accounting,
-  and session across blocking/async drivers. Started failed transfers close the
+  and session through the async driver. Started failed transfers close the
   connection; unsent permit rejection preserves it. Downloads echo PLC job
   references, enforce a 1000-slice budget before offering, and never replay.
   Cancellation between exchanges also invalidates an active async transfer.
@@ -181,7 +184,7 @@ and must return promptly without synchronously stopping/waiting on the dispatche
 
 The async send/receive adapters run on Tokio's blocking pool. Cancelling their
 future detaches a bounded operation that may still send or consume a transfer.
-They do not promise the native cancellation semantics of AsyncClient. Reconnect
+They do not promise the native cancellation semantics of the S7 Client. Reconnect
 uses a new Partner session; unknown send outcomes are never silently replayed.
 
 ## Experimental S7-200 PPI
