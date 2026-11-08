@@ -1,0 +1,4 @@
+/target/
+# Local upstream reference; excluded from this repository.
+/python-snap7/
+.DS_Store
