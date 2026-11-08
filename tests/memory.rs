@@ -186,3 +186,53 @@ fn lost_write_ack_reports_uncertain_range() {
     assert!(!client.is_connected());
     peer.worker.join().unwrap();
 }
+
+/// Typed arrays cross wire chunks while preserving signed/float representations.
+#[test]
+fn typed_scalars_arrays_and_strings_roundtrip() {
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    client.db_write_int(1, 0, i16::MIN).unwrap();
+    assert_eq!(client.db_read_int(1, 0).unwrap(), i16::MIN);
+    client.db_write_lreal(1, 2, -123.25).unwrap();
+    assert_eq!(client.db_read_lreal(1, 2).unwrap(), -123.25);
+    let array: Vec<i32> = (-60..60).collect();
+    client.db_write_array(1, 10, &array).unwrap();
+    assert_eq!(client.db_read_array::<i32>(1, 10, 120).unwrap(), array);
+    assert!(client.db_read_array::<u64>(1, 0, usize::MAX).is_err());
+    client.db_write_string(1, 500, "hé", 10).unwrap();
+    assert_eq!(client.db_read_string(1, 500).unwrap(), "hé");
+    client.db_write_wstring(1, 520, "中文", 10).unwrap();
+    assert_eq!(client.db_read_wstring(1, 520).unwrap(), "中文");
+    assert!(client.db_write_string(1, 0, "long", 1).is_err());
+    assert!(client.db_write_wstring(1, 0, "😀", 10).is_err());
+    client.db_write(1, 550, &[1, 2]).unwrap();
+    assert!(client.db_read_string(1, 550).is_err());
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Concurrent bit updates through clones hold one lock across read/modify/write.
+#[test]
+fn concurrent_bit_updates_preserve_other_bits() {
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    let workers: Vec<_> = (0..8)
+        .map(|bit| {
+            let other = client.clone();
+            thread::spawn(move || other.db_write_bool(1, 0, bit, true).unwrap())
+        })
+        .collect();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    assert_eq!(client.db_read_byte(1, 0).unwrap(), 255);
+    for bit in 0..8 {
+        assert!(client.db_read_bool(1, 0, bit).unwrap());
+    }
+    client.db_write_bool(1, 0, 3, false).unwrap();
+    assert_eq!(client.db_read_byte(1, 0).unwrap(), 247);
+    assert!(client.db_write_bool(1, 0, 8, true).is_err());
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}

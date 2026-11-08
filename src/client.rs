@@ -1,5 +1,7 @@
 //! Blocking client configuration and public operation entry points.
 
+mod typed;
+
 use crate::protocol::{Pdu, PduType};
 use crate::session::Session;
 use crate::transport::TransportConfig;
