@@ -11,7 +11,7 @@ impl Client {
     /// This is not a persistent CPU force job and may be overwritten by a scan
     /// or external writer. It does not add an entry to the CPU force table.
     pub fn force_bit(&self, area: Area, byte_offset: u32, bit: u8, value: bool) -> Result<()> {
-        self.observer.run("force_bit", || {
+        self.observe("force_bit", || {
             if !matches!(area, Area::Inputs | Area::Outputs) || bit > 7 {
                 return Err(Error::InvalidInput(
                     "force requires I/O area and bit 0 through 7",
@@ -27,7 +27,7 @@ impl Client {
     /// Clear one process-image bit, matching upstream cancellation behavior.
     /// The PLC scan may subsequently restore its natural value.
     pub fn cancel_force(&self, area: Area, byte_offset: u32, bit: u8) -> Result<()> {
-        self.observer.run("cancel_force", || {
+        self.observe("cancel_force", || {
             self.force_bit(area, byte_offset, bit, false)
         })
     }
@@ -35,13 +35,10 @@ impl Client {
     /// Read CPU force records from SZL 0x0025. Explicit unsupported-service codes
     /// yield an empty list; transport failures and malformed data remain errors.
     pub fn read_force_table(&self) -> Result<Vec<ForceEntry>> {
-        self.observer
-            .run("read_force_table", || match self.read_szl(0x25, 0) {
-                Ok(szl) => parse_force_table(&szl.data),
-                Err(Error::Plc(0x8104 | 0x8305 | 0x8702)) | Err(Error::Item(0x0a)) => {
-                    Ok(Vec::new())
-                }
-                Err(error) => Err(error),
-            })
+        self.observe("read_force_table", || match self.read_szl(0x25, 0) {
+            Ok(szl) => parse_force_table(&szl.data),
+            Err(Error::Plc(0x8104 | 0x8305 | 0x8702)) | Err(Error::Item(0x0a)) => Ok(Vec::new()),
+            Err(error) => Err(error),
+        })
     }
 }

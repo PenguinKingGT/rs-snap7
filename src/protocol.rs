@@ -451,3 +451,22 @@ pub fn userdata_followup(reference: u16, group: u8, subfunction: u8, sequence: u
         data: vec![0x0a, 0, 0, 0],
     }
 }
+
+/// Predict a standard read job's maximum successful reply before sending it.
+/// This lets retries respect a newly negotiated smaller PDU without overrunning it.
+pub(crate) fn read_response_len(job: &Pdu) -> Option<usize> {
+    if job.kind != PduType::Job || job.parameters.first() != Some(&4) {
+        return None;
+    }
+    let count = usize::from(*job.parameters.get(1)?);
+    if count == 0 || job.parameters.len() != 2 + count * 12 {
+        return None;
+    }
+    let mut size = 14;
+    for (index, address) in job.parameters[2..].chunks_exact(12).enumerate() {
+        let width = WordLen::try_from(address[3]).ok()?.size();
+        let bytes = usize::from(u16::from_be_bytes([address[4], address[5]])) * width;
+        size += 4 + bytes + if index + 1 < count { bytes % 2 } else { 0 };
+    }
+    Some(size)
+}

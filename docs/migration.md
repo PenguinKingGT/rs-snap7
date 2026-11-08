@@ -8,8 +8,8 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **17 of 28 migration features are Done.**
-Foundation types, codecs, transport, protocol, client sessions, and raw memory operations are implemented and tested.
+The Rust library scaffold is complete. **18 of 28 migration features are Done.**
+Core clients, codecs, batching/optimization, recovery, limits, events, diagnostics, and management operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
 status and summary in the same PR as implementation changes. Mark a feature
@@ -39,7 +39,7 @@ Start here; later groups build on these capabilities.
 | ID | Feature to implement | Upstream reference | Status |
 | --- | --- | --- | --- |
 | F10 | Read planning: sorting, merging, packetization, result extraction, plan caching, and parallel dispatch | `snap7/optimizer.py`, `client.py` | Done — [read planner](../src/planner.rs), [blocking pool](../src/pool.rs), [async pool](../src/async_client/pool.rs), [tests](../tests/pool.rs) |
-| F11 | Connection recovery: bounded retries, exponential backoff/jitter, heartbeat, and disconnect/reconnect hooks | `snap7/client.py` | Todo |
+| F11 | Connection recovery: bounded retries, exponential backoff/jitter, heartbeat, and disconnect/reconnect hooks | `snap7/client.py` | Done — [recovery policies](../src/policy.rs), session/heartbeat adapters, [failure and lifecycle tests](../tests/recovery.rs) |
 | F12 | Native asynchronous client with supported operation parity, serialized/concurrent request handling, and cleanup | `snap7/async_client.py` | Done — [native async client](../src/async_client/mod.rs), [cancellation tests](../tests/async_client.rs), sync/async parity scenarios in `tests/` |
 | F13 | Request limiting: fixed spacing/token bucket, bursts, blocking/rejection, sync/async integration | `snap7/rate_limiter.py` | Done — [policies](../src/policy.rs), [wire tests](../tests/rate_limit.rs); fake-time algorithm tests colocated with implementation |
 | F14 | Contextual/structured logging, operation timing/hooks, execution time, and last-error reporting | `snap7/log.py`, `client.py`, `client_base.py` | Done — [events/statistics](../src/observability.rs), [hook tests](../tests/memory.rs); callback/JSON unit tests colocated |

@@ -214,3 +214,219 @@ mod tests {
         }
     }
 }
+
+/// Automatic recovery settings. Read-only requests may be replayed once after
+/// recovery; mutating requests with uncertain outcomes are never replayed.
+#[derive(Debug, Clone)]
+pub struct Recovery {
+    /// Enable bounded reconnect attempts after connection loss.
+    pub enabled: bool,
+    /// Maximum connection attempts per recovery episode.
+    pub max_retries: u32,
+    /// Delay before the second attempt; the first attempt is immediate.
+    pub initial_delay: Duration,
+    /// Multiplier applied to each successive delay, at least one.
+    pub backoff_factor: f64,
+    /// Upper bound on each retry delay.
+    pub max_delay: Duration,
+    /// Symmetric jitter fraction, between zero and one.
+    pub jitter: f64,
+    /// Optional background SZL liveness probe interval; zero is invalid.
+    pub heartbeat_interval: Option<Duration>,
+}
+
+impl Default for Recovery {
+    /// Disable recovery/heartbeat unless explicitly requested.
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_retries: 3,
+            initial_delay: Duration::from_secs(1),
+            backoff_factor: 2.0,
+            max_delay: Duration::from_secs(30),
+            jitter: 0.2,
+            heartbeat_interval: None,
+        }
+    }
+}
+
+impl Recovery {
+    /// Validate retry bounds and all time arithmetic before starting background work.
+    pub fn validate(&self) -> Result<()> {
+        if self.max_retries == 0
+            || self.max_retries > 1000
+            || !self.backoff_factor.is_finite()
+            || self.backoff_factor < 1.0
+            || !self.jitter.is_finite()
+            || !(0.0..=1.0).contains(&self.jitter)
+            || self.initial_delay > self.max_delay
+            || self.heartbeat_interval.is_some_and(|d| d.is_zero())
+        {
+            return Err(Error::InvalidInput("invalid recovery policy"));
+        }
+        for delay in [self.max_delay, self.heartbeat_interval.unwrap_or_default()] {
+            if std::time::Instant::now().checked_add(delay).is_none() {
+                return Err(Error::InvalidInput("recovery duration out of range"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Calculate a capped backoff from a supplied deterministic unit sample.
+    pub(crate) fn delay(&self, attempt: u32, sample: f64) -> Duration {
+        if attempt == 0 {
+            return Duration::ZERO;
+        }
+        let cap = self.max_delay.as_secs_f64();
+        let base = (self.initial_delay.as_secs_f64()
+            * self.backoff_factor.powf(f64::from(attempt - 1)))
+        .min(cap);
+        let seconds = (base * (1.0 + self.jitter * (2.0 * sample - 1.0)))
+            .min(cap)
+            .max(0.0);
+        Duration::try_from_secs_f64(seconds).unwrap_or(self.max_delay)
+    }
+}
+
+/// An unplanned connection transition, dispatched after releasing the session lock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionEvent {
+    /// A previously ready connection was lost or invalidated.
+    Disconnected,
+    /// A replacement connection completed fresh COTP/S7 negotiation.
+    Reconnected,
+}
+
+/// Application transition hook; callback captures are redacted in Debug output.
+#[derive(Clone, Default)]
+pub struct ConnectionHook(Option<std::sync::Arc<dyn Fn(ConnectionEvent) + Send + Sync>>);
+
+impl ConnectionHook {
+    /// Install a short callback, invoked outside session locks.
+    pub fn new(callback: impl Fn(ConnectionEvent) + Send + Sync + 'static) -> Self {
+        Self(Some(std::sync::Arc::new(callback)))
+    }
+    /// Dispatch queued transitions, isolating callback panics from PLC communication.
+    pub(crate) fn emit(&self, events: Vec<ConnectionEvent>) {
+        if let Some(callback) = &self.0 {
+            for event in events {
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(event)));
+            }
+        }
+    }
+}
+
+impl std::fmt::Debug for ConnectionHook {
+    /// Hide callback captures, which may contain application secrets.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectionHook")
+            .field("enabled", &self.0.is_some())
+            .finish()
+    }
+}
+
+/// Recognize failures eligible for reconnect, excluding PLC/protocol/limiter errors.
+pub(crate) fn recoverable(error: &Error) -> bool {
+    matches!(error, Error::Io(_) | Error::Timeout | Error::Disconnected)
+}
+
+/// Only independent, read-only initial jobs can be replayed after losing a reply.
+pub(crate) fn replay_safe(job: &crate::protocol::Pdu) -> bool {
+    use crate::protocol::PduType;
+    match job.kind {
+        PduType::Job => job.parameters.first() == Some(&4),
+        PduType::UserData if job.parameters.len() == 8 => matches!(
+            (job.parameters[5] & 15, job.parameters[6]),
+            (3, 1..=3) | (4, 1) | (7, 1)
+        ),
+        _ => false,
+    }
+}
+
+/// Independent jitter samples per retry; no cryptographic security is required.
+pub(crate) fn jitter_sample() -> f64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static STATE: AtomicU64 = AtomicU64::new(0x243f6a8885a308d3);
+    let mut value = STATE.fetch_add(0x9e3779b97f4a7c15, Ordering::Relaxed);
+    value ^= value >> 30;
+    value = value.wrapping_mul(0xbf58476d1ce4e5b9);
+    value ^= value >> 27;
+    value = value.wrapping_mul(0x94d049bb133111eb);
+    ((value ^ (value >> 31)) >> 11) as f64 / (1u64 << 53) as f64
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    //! Deterministic retry timing and replay classification tests.
+    use super::*;
+
+    /// Backoff and jitter remain capped, and mutation/continuation jobs cannot replay.
+    #[test]
+    fn capped_backoff_validation_and_replay_rules() {
+        let policy = Recovery::default();
+        assert_eq!(policy.delay(0, 0.5), Duration::ZERO);
+        assert_eq!(policy.delay(1, 0.5), Duration::from_secs(1));
+        assert_eq!(policy.delay(2, 0.5), Duration::from_secs(2));
+        assert_eq!(policy.delay(100, 1.0), policy.max_delay);
+        assert!(policy.delay(1, 0.0) < policy.delay(1, 1.0));
+        assert!(
+            Recovery {
+                jitter: f64::NAN,
+                ..policy.clone()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            Recovery {
+                max_retries: 0,
+                ..policy
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(replay_safe(
+            &crate::protocol::read_request(1, &[crate::Address::db(1, 0, 1).unwrap()]).unwrap()
+        ));
+        assert!(!replay_safe(
+            &crate::protocol::write_request(1, &[(crate::Address::db(1, 0, 1).unwrap(), &[0])])
+                .unwrap()
+        ));
+        assert!(!replay_safe(&crate::protocol::userdata_followup(
+            1, 4, 1, 2
+        )));
+    }
+}
+
+/// Classify control/security/clock mutations whose lost ACK must be explicit.
+/// Memory writes retain their richer byte-progress errors in the operation executor.
+pub(crate) fn mutation_failure(job: &crate::protocol::Pdu, error: Error) -> Error {
+    use crate::protocol::PduType;
+    let operation = match job.kind {
+        PduType::Job if matches!(job.parameters.first(), Some(0x28 | 0x29)) => Some("plc_control"),
+        PduType::UserData if job.parameters.len() == 8 => {
+            match (job.parameters[5] & 15, job.parameters[6]) {
+                (5, 1 | 2) => Some("session_password"),
+                (7, 2) => Some("set_clock"),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    if let Some(operation) = operation
+        && matches!(
+            error,
+            Error::Io(_)
+                | Error::Timeout
+                | Error::Protocol(_)
+                | Error::LostReference { .. }
+                | Error::StaleReference { .. }
+        )
+    {
+        return Error::AmbiguousOperation {
+            operation,
+            source: Box::new(error),
+        };
+    }
+    error
+}

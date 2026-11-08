@@ -140,25 +140,43 @@ impl Observer {
     /// Native async nesting uses future-local scopes; cancelled futures have no
     /// completion record because they did not return a result to their caller.
     #[cfg(feature = "async")]
-    pub(crate) async fn run_async<T>(
+    pub(crate) fn run_async<T>(
         &self,
         name: &'static str,
         call: impl std::future::Future<Output = crate::Result<T>>,
-    ) -> crate::Result<T> {
-        let id = self as *const Self as usize;
-        let mut active = ASYNC_ACTIVE.try_with(Clone::clone).unwrap_or_default();
-        if active.contains(&id) {
-            return call.await;
+    ) -> impl std::future::Future<Output = crate::Result<T>> {
+        // Box before constructing the returned future: nested convenience calls
+        // must not multiply their concrete future layouts on the caller's stack.
+        let call = Box::pin(call);
+        async move {
+            let id = self as *const Self as usize;
+            let mut active = ASYNC_ACTIVE.try_with(Clone::clone).unwrap_or_default();
+            if active.contains(&id) {
+                return call.await;
+            }
+            active.push(id);
+            ASYNC_ACTIVE
+                .scope(active, async {
+                    let start = Instant::now();
+                    let result = call.await;
+                    self.record(name, start.elapsed(), result.as_ref().err());
+                    result
+                })
+                .await
         }
-        active.push(id);
+    }
+
+    /// Whether this observer is still inside a surrounding synchronous operation.
+    pub(crate) fn active(&self) -> bool {
+        ACTIVE.with(|v| v.borrow().contains(&(self as *const Self as usize)))
+    }
+
+    /// Whether an outer async operation still owns the current event scope.
+    #[cfg(feature = "async")]
+    pub(crate) fn active_async(&self) -> bool {
         ASYNC_ACTIVE
-            .scope(active, async {
-                let start = Instant::now();
-                let result = call.await;
-                self.record(name, start.elapsed(), result.as_ref().err());
-                result
-            })
-            .await
+            .try_with(|v| v.contains(&(self as *const Self as usize)))
+            .unwrap_or(false)
     }
 
     /// Snapshot accounting without taking the PLC session lock.
@@ -219,6 +237,7 @@ fn kind(error: &Error) -> &'static str {
         Error::Unsupported(_) => "unsupported",
         Error::PartialWrite { .. } => "partial_write",
         Error::AmbiguousWrite { .. } => "ambiguous_write",
+        Error::AmbiguousOperation { .. } => "ambiguous_operation",
     }
 }
 
@@ -227,7 +246,9 @@ fn code(error: &Error) -> Option<u16> {
     match error {
         Error::Plc(code) | Error::Authentication(code) => Some(*code),
         Error::Item(code) => Some(u16::from(*code)),
-        Error::PartialWrite { source, .. } | Error::AmbiguousWrite { source, .. } => code(source),
+        Error::PartialWrite { source, .. }
+        | Error::AmbiguousWrite { source, .. }
+        | Error::AmbiguousOperation { source, .. } => code(source),
         _ => None,
     }
 }

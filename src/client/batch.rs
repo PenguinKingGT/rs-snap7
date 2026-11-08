@@ -8,42 +8,50 @@ impl Client {
     /// Results follow input order; PLC item failures do not discard other items.
     /// A transport or malformed-message error fails the outer operation.
     pub fn read_multi_vars(&self, addresses: &[Address]) -> Result<Vec<Result<Vec<u8>>>> {
-        self.observer.run("read_multi_vars", || {
+        self.observe("read_multi_vars", || {
             let mut session = self.session()?;
-            if !session.is_connected() {
-                return Err(Error::Disconnected);
-            }
-            let plan = session.read_plan(addresses)?;
-            let mut results: Vec<Result<Vec<u8>>> =
-                (0..plan.block_count()).map(|_| Ok(Vec::new())).collect();
-            for pieces in &plan.packets {
-                let packet: Vec<_> = pieces.iter().map(|piece| piece.address).collect();
-                let response =
-                    session.transact(|reference| protocol::read_request(reference, &packet))?;
-                let outcomes = session.validate(protocol::parse_read(&response, &packet))?;
-                for (piece, outcome) in pieces.iter().zip(outcomes) {
-                    match (&mut results[piece.index], outcome) {
-                        (Ok(data), Ok(fragment)) => data.extend(fragment),
-                        (slot @ Ok(_), Err(error)) => *slot = Err(error),
-                        _ => {}
+            let deadline = session.deadline();
+            session.ensure_ready(deadline)?;
+            'planning: loop {
+                let plan = session.read_plan(addresses)?;
+                let mut results: Vec<Result<Vec<u8>>> =
+                    (0..plan.block_count()).map(|_| Ok(Vec::new())).collect();
+                for pieces in &plan.packets {
+                    let packet: Vec<_> = pieces.iter().map(|piece| piece.address).collect();
+                    let before = session.limits.pdu_length;
+                    let response =
+                        session.transact(|reference| protocol::read_request(reference, &packet));
+                    if matches!(response, Err(Error::InvalidInput(_)))
+                        && before != session.limits.pdu_length
+                    {
+                        continue 'planning;
+                    }
+                    let response = response?;
+                    let outcomes = session.validate(protocol::parse_read(&response, &packet))?;
+                    for (piece, outcome) in pieces.iter().zip(outcomes) {
+                        match (&mut results[piece.index], outcome) {
+                            (Ok(data), Ok(fragment)) => data.extend(fragment),
+                            (slot @ Ok(_), Err(error)) => *slot = Err(error),
+                            _ => {}
+                        }
                     }
                 }
-            }
-            let fallback = plan.fallback_items(&results);
-            let mut results = plan.extract(results)?;
-            for (index, address) in fallback {
-                match session.read_area(
-                    address.area(),
-                    address.db_number(),
-                    address.start(),
-                    usize::from(address.count()),
-                ) {
-                    Ok(data) => results[index] = Ok(data),
-                    Err(error @ Error::Item(_)) => results[index] = Err(error),
-                    Err(error) => return Err(error),
+                let fallback = plan.fallback_items(&results);
+                let mut results = plan.extract(results)?;
+                for (index, address) in fallback {
+                    match session.read_area(
+                        address.area(),
+                        address.db_number(),
+                        address.start(),
+                        usize::from(address.count()),
+                    ) {
+                        Ok(data) => results[index] = Ok(data),
+                        Err(error @ Error::Item(_)) => results[index] = Err(error),
+                        Err(error) => return Err(error),
+                    }
                 }
+                return Ok(results);
             }
-            Ok(results)
         })
     }
 
@@ -51,7 +59,7 @@ impl Client {
     /// Results preserve PLC item errors. An outer communication error reports total
     /// acknowledged bytes and the uncertain packet size; positions may be noncontiguous.
     pub fn write_multi_vars(&self, items: &[(Address, &[u8])]) -> Result<Vec<Result<()>>> {
-        self.observer.run("write_multi_vars", || {
+        self.observe("write_multi_vars", || {
             for (address, bytes) in items {
                 if bytes.len() != address.byte_len() {
                     return Err(Error::InvalidInput("write payload width mismatch"));
@@ -61,9 +69,8 @@ impl Client {
                 }
             }
             let mut session = self.session()?;
-            if !session.is_connected() {
-                return Err(Error::Disconnected);
-            }
+            let deadline = session.deadline();
+            session.ensure_ready(deadline)?;
             let addresses: Vec<_> = items.iter().map(|(address, _)| *address).collect();
             let plan = planner::batches(&addresses, session.limits.pdu_length, true)?;
             let mut results: Vec<Result<()>> = items.iter().map(|_| Ok(())).collect();

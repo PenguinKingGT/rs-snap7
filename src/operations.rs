@@ -75,17 +75,38 @@ impl Session {
         start: u32,
         count: usize,
     ) -> Result<Vec<u8>> {
-        if !self.is_connected() {
-            return Err(Error::Disconnected);
-        }
+        let deadline = self.deadline();
         let word = area.word_len();
-        let plan = chunks(area, db, start, count, word, self.limits.pdu_length, false)?;
+        let mut plan = chunks(area, db, start, count, word, self.limits.pdu_length, false)?;
+        let original_pdu = self.limits.pdu_length;
+        self.ensure_ready(deadline)?;
+        if original_pdu != self.limits.pdu_length {
+            plan = chunks(area, db, start, count, word, self.limits.pdu_length, false)?;
+        }
+        let mut pending: std::collections::VecDeque<_> = plan.into();
         let mut data = Vec::with_capacity(count * word.size());
-        for address in plan {
-            let response =
-                self.transact(|reference| protocol::read_request(reference, &[address]))?;
-            let outcomes = protocol::parse_read(&response, &[address]);
-            let mut outcomes = self.validate(outcomes)?;
+        while let Some(address) = pending.pop_front() {
+            let before = self.limits.pdu_length;
+            let response = self.transact_until(
+                |reference| protocol::read_request(reference, &[address]),
+                deadline,
+            );
+            if matches!(response, Err(Error::InvalidInput(_))) && before != self.limits.pdu_length {
+                let smaller = chunks(
+                    area,
+                    db,
+                    address.start(),
+                    usize::from(address.count()),
+                    word,
+                    self.limits.pdu_length,
+                    false,
+                )?;
+                for piece in smaller.into_iter().rev() {
+                    pending.push_front(piece);
+                }
+                continue;
+            }
+            let mut outcomes = self.validate(protocol::parse_read(&response?, &[address]))?;
             data.extend(outcomes.remove(0)?);
         }
         Ok(data)
@@ -99,9 +120,7 @@ impl Session {
         start: u32,
         data: &[u8],
     ) -> Result<()> {
-        if !self.is_connected() {
-            return Err(Error::Disconnected);
-        }
+        self.ensure_ready(self.deadline())?;
         let word = area.word_len();
         if !data.len().is_multiple_of(word.size()) {
             return Err(Error::InvalidInput("write must contain whole elements"));

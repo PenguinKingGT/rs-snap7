@@ -10,7 +10,7 @@ impl Client {
     /// Read a complete system status list, preserving its unmodified list body.
     /// ID/index, fragment count, total payload (1 MiB), and operation deadline are checked.
     pub fn read_szl(&self, id: u16, index: u16) -> Result<Szl> {
-        self.observer.run("read_szl", || {
+        self.observe("read_szl", || {
             let mut session = self.session()?;
             let deadline = session.deadline();
             let mut payload = Vec::from(id.to_be_bytes());
@@ -58,42 +58,41 @@ impl Client {
 
     /// Read the available SZL ID list as the upstream raw list body.
     pub fn read_szl_list(&self) -> Result<Vec<u8>> {
-        self.observer
-            .run("read_szl_list", || Ok(self.read_szl(0, 0)?.data))
+        self.observe("read_szl_list", || Ok(self.read_szl(0, 0)?.data))
     }
     /// Read CPU component identification.
     pub fn get_cpu_info(&self) -> Result<CpuInfo> {
-        self.observer.run("get_cpu_info", || {
+        self.observe("get_cpu_info", || {
             szl::parse_cpu_info(&self.read_szl(0x001c, 0)?.data)
         })
     }
     /// Read actual CPU state through SZL 0x0424, unlike upstream's constant RUN stub.
     pub fn get_cpu_state(&self) -> Result<CpuState> {
-        self.observer.run("get_cpu_state", || {
+        self.observe("get_cpu_state", || {
             szl::parse_cpu_state(&self.read_szl(0x0424, 0)?.data)
         })
     }
     /// Read communication processor information using the upstream field layout.
     pub fn get_cp_info(&self) -> Result<CpInfo> {
-        self.observer.run("get_cp_info", || {
+        self.observe("get_cp_info", || {
             szl::parse_cp_info(&self.read_szl(0x0131, 0)?.data)
         })
     }
     /// Read module order code, preferring installed firmware over bootloader version.
     pub fn get_order_code(&self) -> Result<OrderCode> {
-        self.observer.run("get_order_code", || {
+        self.observe("get_order_code", || {
             szl::parse_order_code(&self.read_szl(0x0011, 0)?)
         })
     }
     /// Read the CPU protection fields.
     pub fn get_protection(&self) -> Result<Protection> {
-        self.observer.run("get_protection", || {
+        self.observe("get_protection", || {
             szl::parse_protection(&self.read_szl(0x0232, 0)?.data)
         })
     }
     /// Read diagnostic events in wire order (upstream returns newest first).
     pub fn read_diagnostic_buffer(&self) -> Result<Vec<DiagnosticEntry>> {
-        self.observer.run("read_diagnostic_buffer", || {
+        self.observe("read_diagnostic_buffer", || {
             szl::parse_diagnostic_buffer(&self.read_szl(0x00a0, 0)?.data)
         })
     }

@@ -16,8 +16,13 @@ pub(super) struct Session {
     reference: u16,
     read_plan: Option<std::sync::Arc<crate::planner::ReadPlan>>,
     timeout: Duration,
+    operation_deadline: Instant,
     limiter: crate::policy::Limiter,
     origin: Instant,
+    config: ClientConfig,
+    manual_closed: bool,
+    loss_notified: bool,
+    events: Vec<crate::policy::ConnectionEvent>,
 }
 
 impl Session {
@@ -35,11 +40,16 @@ impl Session {
             reference: 0,
             read_plan: None,
             timeout: config.transport.timeout,
+            operation_deadline: deadline,
             limiter: crate::policy::Limiter::new(config.rate_limit)?,
             origin: Instant::now(),
+            config: config.clone(),
+            manual_closed: false,
+            loss_notified: false,
+            events: Vec::new(),
         };
         let reply = session
-            .transact_until(
+            .exchange_until(
                 |reference| protocol::setup_request(reference, config.requested_pdu),
                 deadline,
             )
@@ -71,23 +81,35 @@ impl Session {
     }
     /// Total deadline shared by all steps of a logical operation.
     pub(super) fn deadline(&self) -> Instant {
-        Instant::now() + self.timeout
+        self.operation_deadline
     }
     /// Drop socket ownership before awaiting, so cancellation cannot leave a live session.
     pub(super) async fn disconnect(&mut self) -> Result<()> {
+        self.manual_closed = true;
         let deadline = self.deadline();
         if let Some(connection) = self.connection.take() {
             connection.disconnect(deadline).await?;
         }
         Ok(())
     }
+    /// Exchange an advanced raw job without automatic replay.
+    pub(super) async fn raw_exchange(&mut self, job: Pdu) -> Result<Pdu> {
+        self.exchange_until(|reference| Ok(Pdu { reference, ..job }), self.deadline())
+            .await
+    }
+
+    /// Start one logical operation after acquiring its exclusive session guard.
+    pub(super) fn start_operation(&mut self) {
+        self.operation_deadline = Instant::now() + self.timeout;
+    }
+
     /// Execute one job with a new deadline.
     pub(super) async fn transact(&mut self, build: impl FnOnce(u16) -> Result<Pdu>) -> Result<Pdu> {
         self.transact_until(build, self.deadline()).await
     }
     /// Own the connection locally across awaits. If this future is dropped after
     /// transmission starts, the descriptor closes and the session remains disconnected.
-    pub(super) async fn transact_until(
+    async fn exchange_until(
         &mut self,
         build: impl FnOnce(u16) -> Result<Pdu>,
         deadline: Instant,
@@ -99,7 +121,13 @@ impl Session {
             return Err(Error::DeadlineBeforeSend);
         }
         let next = self.reference.wrapping_add(1);
-        let bytes = build(next)?.encode()?;
+        let job = build(next)?;
+        if protocol::read_response_len(&job)
+            .is_some_and(|size| size > usize::from(self.limits.pdu_length))
+        {
+            return Err(Error::InvalidInput("read response exceeds negotiated PDU"));
+        }
+        let bytes = job.encode()?;
         if bytes.len() > usize::from(self.limits.pdu_length) {
             return Err(Error::InvalidInput("request exceeds negotiated PDU"));
         }
@@ -136,6 +164,14 @@ impl Session {
             Err(Error::Protocol("stale response retry limit reached"))
         }
         .await;
+        if result.is_err()
+            && !matches!(result, Err(Error::Plc(_) | Error::Authentication(_)))
+            && !self.loss_notified
+        {
+            self.events
+                .push(crate::policy::ConnectionEvent::Disconnected);
+            self.loss_notified = true;
+        }
         if result.is_ok() || matches!(result, Err(Error::Plc(_) | Error::Authentication(_))) {
             self.connection = Some(connection);
         }
@@ -144,8 +180,146 @@ impl Session {
     /// A malformed service reply also invalidates its completed protocol stream.
     pub(super) fn validate<T>(&mut self, result: Result<T>) -> Result<T> {
         if matches!(result, Err(Error::Protocol(_))) {
+            if self.connection.is_some() && !self.loss_notified {
+                self.events
+                    .push(crate::policy::ConnectionEvent::Disconnected);
+                self.loss_notified = true;
+            }
             self.connection = None;
         }
         result
+    }
+    /// Apply recovery only to known-safe initial reads, never replaying writes.
+    pub(super) async fn transact_until(
+        &mut self,
+        build: impl FnOnce(u16) -> Result<Pdu>,
+        deadline: Instant,
+    ) -> Result<Pdu> {
+        let job = build(0)?;
+        if !self.is_connected() {
+            if job.kind == protocol::PduType::UserData && job.parameters.len() > 8 {
+                return Err(Error::Disconnected);
+            }
+            self.ensure_ready(deadline).await?;
+        }
+        let result = self
+            .exchange_until(
+                |reference| {
+                    Ok(Pdu {
+                        reference,
+                        ..job.clone()
+                    })
+                },
+                deadline,
+            )
+            .await;
+        if result.as_ref().is_err_and(crate::policy::recoverable)
+            && self.config.recovery.enabled
+            && !self.manual_closed
+            && crate::policy::replay_safe(&job)
+        {
+            Box::pin(self.recover(deadline)).await?;
+            return self
+                .exchange_until(|reference| Ok(Pdu { reference, ..job }), deadline)
+                .await;
+        }
+        result.map_err(|error| crate::policy::mutation_failure(&job, error))
+    }
+
+    /// Reconnect before a new request only when no request has yet been sent.
+    pub(super) async fn ensure_ready(&mut self, deadline: Instant) -> Result<()> {
+        if self.is_connected() {
+            return Ok(());
+        }
+        if !self.manual_closed && !self.loss_notified {
+            self.events
+                .push(crate::policy::ConnectionEvent::Disconnected);
+            self.loss_notified = true;
+        }
+        if self.config.recovery.enabled && !self.manual_closed {
+            Box::pin(self.recover(deadline)).await
+        } else {
+            Err(Error::Disconnected)
+        }
+    }
+
+    /// Attempt fresh negotiations within the original operation deadline.
+    async fn recover(&mut self, deadline: Instant) -> Result<()> {
+        let mut last = Error::Disconnected;
+        for attempt in 0..self.config.recovery.max_retries {
+            let delay = self
+                .config
+                .recovery
+                .delay(attempt, crate::policy::jitter_sample());
+            if Instant::now() >= deadline
+                || delay >= deadline.saturating_duration_since(Instant::now())
+            {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            if !delay.is_zero() {
+                tokio::time::sleep(delay).await;
+            }
+            match self.reopen(deadline).await {
+                Ok(()) => {
+                    self.loss_notified = false;
+                    self.events
+                        .push(crate::policy::ConnectionEvent::Reconnected);
+                    return Ok(());
+                }
+                Err(error) if crate::policy::recoverable(&error) => last = error,
+                Err(error) => return Err(error),
+            }
+        }
+        Err(last)
+    }
+
+    /// Replace transport and reset references/plan state, retaining limiter credit.
+    async fn reopen(&mut self, deadline: Instant) -> Result<()> {
+        self.connection = Some(AsyncConnection::connect(&self.config.transport, deadline).await?);
+        self.reference = 0;
+        self.read_plan = None;
+        let requested = self.config.requested_pdu;
+        self.limits.pdu_length = requested;
+        let result = self
+            .exchange_until(
+                |reference| protocol::setup_request(reference, requested),
+                deadline,
+            )
+            .await
+            .and_then(|reply| protocol::parse_setup(&reply, requested));
+        match result {
+            Ok(limits) => {
+                self.limits = limits;
+                Ok(())
+            }
+            Err(error) => {
+                self.connection = None;
+                Err(error)
+            }
+        }
+    }
+
+    /// Drain transitions while locked; callers dispatch them after unlocking.
+    pub(super) fn take_events(&mut self) -> Vec<crate::policy::ConnectionEvent> {
+        std::mem::take(&mut self.events)
+    }
+
+    /// Manual disconnect prevents idle workers from silently reconnecting.
+    pub(super) fn manually_closed(&self) -> bool {
+        self.manual_closed
+    }
+
+    /// Probe liveness with a standard read-only CPU-status SZL request.
+    pub(super) async fn heartbeat(&mut self) -> Result<()> {
+        let response = self
+            .transact(|reference| {
+                protocol::userdata_request(reference, 4, 1, Some(&[4, 0x24, 0, 0]))
+            })
+            .await?;
+        let reply = self.validate(protocol::parse_userdata(&response, 4, 1, false))?;
+        if reply.payload.len() < 4 || reply.payload[..4] != [4, 0x24, 0, 0] {
+            return self.validate(Err(Error::Protocol("heartbeat SZL identity mismatch")));
+        }
+        Ok(())
     }
 }

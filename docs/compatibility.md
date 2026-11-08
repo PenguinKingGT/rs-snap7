@@ -27,7 +27,7 @@ and failure behavior. No PLC hardware has been validated yet.
 - `ClientConfig` replaces numeric parameter getters/setters and ignored legacy
   constructor arguments. Settings are applied before connecting; routing and
   explicit variable-length TSAPs live in `TransportConfig`. `reconnect()` is
-  explicit; automatic recovery and heartbeat are not implemented yet.
+  explicit by default; optional automatic recovery/heartbeat use `Recovery`.
 - `Client` clones serialize all operations on one shared session, improving on
   upstream blocking-client thread safety. `is_connected()` reports local state,
   not remote liveness. Raw S7 jobs receive a session-owned request reference.
@@ -86,3 +86,15 @@ and failure behavior. No PLC hardware has been validated yet.
   after session guards are released; hook panics are isolated and counted.
   JSON records are opt-in application sinks; the library sets up no global logger.
   Cancelled async futures have no completion event because no result was returned.
+
+- Recovery is disabled by default. Enabling it allows one replay of a known
+  read-only initial job after bounded backoff/reconnect attempts. Negotiation
+  resets references and cached plans, retains limiter credit, and re-plans reads
+  when the replacement PDU is smaller. Stateful continuation jobs never replay.
+- Mutation ACK loss remains explicit: byte writes report confirmed/uncertain
+  ranges; control, clock, and password jobs use `AmbiguousOperation`. PLC refusal
+  codes remain definite errors. Raw `iso_exchange` never automatically replays.
+- Optional heartbeat workers send guarded CPU-status SZL probes. Explicit close
+  prevents background reconnection; dropping the last clone wakes/aborts its
+  worker. Loss/recovery hooks run outside session locks and isolate sink panics.
+  Completed async operation hooks use boxed future scopes to bound stack growth.

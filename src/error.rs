@@ -45,6 +45,13 @@ pub enum Error {
     RateLimited,
     /// An explicitly unsupported operation or representation.
     Unsupported(&'static str),
+    /// A non-byte mutation may have executed without a trustworthy acknowledgement.
+    AmbiguousOperation {
+        /// Operation category, without request data or credentials.
+        operation: &'static str,
+        /// Original communication or acknowledgement failure.
+        source: Box<Error>,
+    },
     /// Earlier chunks were acknowledged before a definite later failure.
     PartialWrite {
         /// Positively acknowledged bytes.
@@ -86,6 +93,9 @@ impl fmt::Display for Error {
             ),
             Self::RateLimited => f.write_str("request rate limit reached"),
             Self::Unsupported(s) => write!(f, "unsupported: {s}"),
+            Self::AmbiguousOperation { operation, source } => {
+                write!(f, "{operation} outcome unknown: {source}")
+            }
             Self::PartialWrite { confirmed, source } => {
                 write!(f, "partial write: {confirmed} bytes confirmed: {source}")
             }
@@ -106,7 +116,9 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(e) => Some(e),
-            Self::AmbiguousWrite { source, .. } | Self::PartialWrite { source, .. } => Some(source),
+            Self::AmbiguousWrite { source, .. }
+            | Self::PartialWrite { source, .. }
+            | Self::AmbiguousOperation { source, .. } => Some(source),
             _ => None,
         }
     }

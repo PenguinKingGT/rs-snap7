@@ -181,3 +181,29 @@ async fn async_control_and_clock_client_exchanges() {
     client.disconnect().await.unwrap();
     peer.join().unwrap();
 }
+
+/// A missing control acknowledgement is explicitly uncertain and is never replayed.
+#[test]
+fn control_ack_loss_is_an_ambiguous_operation() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let mut config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
+    config.recovery.enabled = true;
+    let worker = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        negotiate(&mut stream, 480);
+        let request = read_frame(&mut stream);
+        assert_eq!(request[13], 0x29);
+        drop(listener);
+        drop(stream);
+    });
+    let client = Client::connect(config).unwrap();
+    assert!(matches!(
+        client.plc_stop(),
+        Err(Error::AmbiguousOperation {
+            operation: "plc_control",
+            ..
+        })
+    ));
+    assert!(!client.is_connected());
+    worker.join().unwrap();
+}
