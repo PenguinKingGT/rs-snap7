@@ -46,7 +46,7 @@ impl AsyncClientPool {
                 continue;
             }
             let client = client.clone();
-            jobs.spawn(async move {
+            let job = async move {
                 let addresses: Vec<_> = items.iter().map(|(_, a)| *a).collect();
                 client.read_multi_vars(&addresses).await.map(|results| {
                     items
@@ -55,7 +55,10 @@ impl AsyncClientPool {
                         .zip(results)
                         .collect::<Vec<_>>()
                 })
-            });
+            };
+            #[cfg(feature = "blocking")]
+            let job = crate::blocking::hooks::inherit(job);
+            jobs.spawn(job);
         }
         let mut outcomes = Vec::new();
         while let Some(result) = jobs.join_next().await {

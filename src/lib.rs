@@ -60,3 +60,6 @@ pub mod discovery;
 
 #[cfg(feature = "demo")]
 pub mod demo;
+
+#[cfg(feature = "blocking")]
+pub mod blocking;

@@ -56,12 +56,30 @@ impl OperationEvent {
 /// Application callback, shared by clones and redacted in Debug output.
 /// Callbacks must be short; asynchronous sinks should enqueue events themselves.
 #[derive(Clone, Default)]
-pub struct OperationHook(Option<Arc<dyn Fn(OperationEvent) + Send + Sync>>);
+pub struct OperationHook {
+    callback: Option<Arc<dyn Fn(OperationEvent) + Send + Sync>>,
+    #[cfg(feature = "blocking")]
+    delivery: Option<Arc<crate::blocking::hooks::Delivery>>,
+}
 
 impl OperationHook {
     /// Install a callback. It runs after session guards have been released.
     pub fn new(callback: impl Fn(OperationEvent) + Send + Sync + 'static) -> Self {
-        Self(Some(Arc::new(callback)))
+        Self {
+            callback: Some(Arc::new(callback)),
+            ..Default::default()
+        }
+    }
+    /// Whether a sink needs deferred blocking delivery.
+    #[cfg(feature = "blocking")]
+    pub(crate) fn enabled(&self) -> bool {
+        self.callback.is_some()
+    }
+    /// Preserve the application sink while adapting its execution context.
+    #[cfg(feature = "blocking")]
+    pub(crate) fn deferred(mut self, delivery: Arc<crate::blocking::hooks::Delivery>) -> Self {
+        self.delivery = Some(delivery);
+        self
     }
 }
 
@@ -69,7 +87,7 @@ impl fmt::Debug for OperationHook {
     /// Never print callback captures, which may contain application secrets.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OperationHook")
-            .field("enabled", &self.0.is_some())
+            .field("enabled", &self.callback.is_some())
             .finish()
     }
 }
@@ -85,6 +103,8 @@ pub struct OperationStats {
     pub last: Option<OperationEvent>,
     /// Callback panics isolated from PLC communication.
     pub hook_panics: u64,
+    /// Background hook notifications dropped by a full blocking-adapter queue.
+    pub background_hook_events_dropped: u64,
 }
 
 /// Shared accounting independent of transport locks and runtime selection.
@@ -93,7 +113,7 @@ pub(crate) struct Observer {
     endpoint: SocketAddr,
     hook: OperationHook,
     stats: Mutex<OperationStats>,
-    hook_panics: AtomicU64,
+    hook_panics: Arc<AtomicU64>,
 }
 
 thread_local! {
@@ -113,7 +133,7 @@ impl Observer {
             endpoint,
             hook,
             stats: Mutex::new(OperationStats::default()),
-            hook_panics: AtomicU64::new(0),
+            hook_panics: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -199,10 +219,19 @@ impl Observer {
             stats.failed = stats.failed.saturating_add(u64::from(error.is_some()));
             stats.last = Some(event.clone());
         }
-        if let Some(callback) = &self.hook.0
-            && catch_unwind(AssertUnwindSafe(|| callback(event))).is_err()
-        {
-            self.hook_panics.fetch_add(1, Ordering::Relaxed);
+        if let Some(callback) = self.hook.callback.clone() {
+            let panics = self.hook_panics.clone();
+            let invoke = move || {
+                if catch_unwind(AssertUnwindSafe(|| callback(event))).is_err() {
+                    panics.fetch_add(1, Ordering::Relaxed);
+                }
+            };
+            #[cfg(feature = "blocking")]
+            if let Some(delivery) = &self.hook.delivery {
+                delivery.dispatch(invoke);
+                return;
+            }
+            invoke();
         }
     }
 }
@@ -221,6 +250,7 @@ impl Drop for ActiveScope {
 /// Describe errors without serializing potentially sensitive cause messages.
 fn kind(error: &Error) -> &'static str {
     match error {
+        Error::BlockingInAsyncContext => "blocking_in_async_context",
         Error::InvalidInput(_) => "invalid_input",
         Error::Protocol(_) | Error::StaleReference { .. } | Error::LostReference { .. } => {
             "protocol"

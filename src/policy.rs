@@ -299,18 +299,49 @@ pub enum ConnectionEvent {
 
 /// Application transition hook; callback captures are redacted in Debug output.
 #[derive(Clone, Default)]
-pub struct ConnectionHook(Option<std::sync::Arc<dyn Fn(ConnectionEvent) + Send + Sync>>);
+pub struct ConnectionHook {
+    callback: Option<std::sync::Arc<dyn Fn(ConnectionEvent) + Send + Sync>>,
+    #[cfg(feature = "blocking")]
+    delivery: Option<std::sync::Arc<crate::blocking::hooks::Delivery>>,
+}
 
 impl ConnectionHook {
     /// Install a short callback, invoked outside session locks.
     pub fn new(callback: impl Fn(ConnectionEvent) + Send + Sync + 'static) -> Self {
-        Self(Some(std::sync::Arc::new(callback)))
+        Self {
+            callback: Some(std::sync::Arc::new(callback)),
+            ..Default::default()
+        }
+    }
+    /// Whether an application sink requires a blocking delivery adapter.
+    #[cfg(feature = "blocking")]
+    pub(crate) fn enabled(&self) -> bool {
+        self.callback.is_some()
+    }
+    /// Route events through caller scopes or the bounded background dispatcher.
+    #[cfg(feature = "blocking")]
+    pub(crate) fn deferred(
+        mut self,
+        delivery: std::sync::Arc<crate::blocking::hooks::Delivery>,
+    ) -> Self {
+        self.delivery = Some(delivery);
+        self
     }
     /// Dispatch queued transitions, isolating callback panics from PLC communication.
     pub(crate) fn emit(&self, events: Vec<ConnectionEvent>) {
-        if let Some(callback) = &self.0 {
+        if let Some(callback) = &self.callback {
             for event in events {
-                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(event)));
+                let callback = callback.clone();
+                let invoke = move || {
+                    let _ =
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(event)));
+                };
+                #[cfg(feature = "blocking")]
+                if let Some(delivery) = &self.delivery {
+                    delivery.dispatch(invoke);
+                    continue;
+                }
+                invoke();
             }
         }
     }
@@ -320,7 +351,7 @@ impl std::fmt::Debug for ConnectionHook {
     /// Hide callback captures, which may contain application secrets.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConnectionHook")
-            .field("enabled", &self.0.is_some())
+            .field("enabled", &self.callback.is_some())
             .finish()
     }
 }

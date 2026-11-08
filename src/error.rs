@@ -9,6 +9,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// A synchronous adapter was called from an entered Tokio runtime.
+    BlockingInAsyncContext,
     /// A caller supplied an invalid address, length, or value.
     InvalidInput(&'static str),
     /// A packet violated its declared layout or expected operation.
@@ -74,6 +76,9 @@ impl fmt::Display for Error {
     /// Render a stable category together with available context or wire codes.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::BlockingInAsyncContext => {
+                f.write_str("blocking operation in an async runtime; use the async client")
+            }
             Self::InvalidInput(s) => write!(f, "invalid input: {s}"),
             Self::Protocol(s) => write!(f, "invalid protocol: {s}"),
             Self::Io(e) => write!(f, "I/O: {e}"),
