@@ -2,6 +2,7 @@
 
 mod batch;
 mod diagnostics;
+mod force;
 mod management;
 mod security;
 mod typed;

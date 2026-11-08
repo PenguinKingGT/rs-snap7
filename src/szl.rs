@@ -225,3 +225,41 @@ fn text(bytes: &[u8]) -> String {
         .trim_end_matches(['\0', ' '])
         .to_owned()
 }
+
+/// One CPU force-table entry; process-image writes do not create these records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForceEntry {
+    /// Input or output memory area.
+    pub area: crate::Area,
+    /// Byte offset in the process image.
+    pub byte_offset: u16,
+    /// Bit index, 0 through 7.
+    pub bit: u8,
+    /// Forced state.
+    pub value: bool,
+}
+
+/// Parse complete eight-byte upstream force records, rejecting invalid areas/bits.
+pub fn parse_force_table(data: &[u8]) -> Result<Vec<ForceEntry>> {
+    if !data.len().is_multiple_of(8) {
+        return Err(Error::Protocol("partial force-table record"));
+    }
+    data.chunks_exact(8)
+        .map(|entry| {
+            let area = match codec::read::<u16>(entry, 0)? {
+                0x81 => crate::Area::Inputs,
+                0x82 => crate::Area::Outputs,
+                _ => return Err(Error::Protocol("invalid force-table area")),
+            };
+            if entry[4] > 7 || entry[5] > 1 {
+                return Err(Error::Protocol("invalid force-table bit or value"));
+            }
+            Ok(ForceEntry {
+                area,
+                byte_offset: codec::read(entry, 2)?,
+                bit: entry[4],
+                value: entry[5] != 0,
+            })
+        })
+        .collect()
+}

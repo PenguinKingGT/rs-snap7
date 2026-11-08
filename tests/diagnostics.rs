@@ -123,6 +123,7 @@ fn fragmented_szl_and_client_information_methods() {
                 0x131 => vec![1, 224, 0, 8, 0, 3, 0, 4],
                 0x232 => vec![0, 1, 0, 2, 0, 3, 0, 4, 0, 5],
                 0xa0 => vec![0; 20],
+                0x25 => vec![0, 0x81, 0, 10, 3, 1, 0, 0],
                 0 => vec![0, 2, 0, 1, 0, 0x1c],
                 _ => unreachable!(),
             };
@@ -178,6 +179,26 @@ fn fragmented_szl_and_client_information_methods() {
     assert_eq!(client.get_protection().unwrap().effective, 3);
     assert_eq!(client.read_diagnostic_buffer().unwrap().len(), 1);
     assert_eq!(client.read_szl_list().unwrap(), [0, 2, 0, 1, 0, 0x1c]);
+    let table = client.read_force_table().unwrap();
+    assert_eq!(table[0].byte_offset, 10);
+    assert!(table[0].value);
     client.disconnect().unwrap();
     peer.join().unwrap();
+}
+
+/// Malformed force records are not quietly truncated or interpreted as valid I/O.
+#[test]
+fn force_table_layout_and_rejected_records() {
+    let valid = [0, 0x81, 0, 10, 3, 1, 0, 0];
+    assert!(parse_force_table(&[]).unwrap().is_empty());
+    let parsed = parse_force_table(&valid).unwrap();
+    assert_eq!(parsed[0].area, rs_snap7::Area::Inputs);
+    for n in 1..8 {
+        assert!(parse_force_table(&valid[..n]).is_err());
+    }
+    for index in [0, 1, 4, 5] {
+        let mut invalid = valid;
+        invalid[index] = 255;
+        assert!(parse_force_table(&invalid).is_err());
+    }
 }

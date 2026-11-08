@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **12 of 28 migration features are Done.**
+The Rust library scaffold is complete. **13 of 28 migration features are Done.**
 Foundation types, codecs, transport, protocol, client sessions, and raw memory operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -47,7 +47,7 @@ Start here; later groups build on these capabilities.
 | F16 | PLC stop/hot/cold start, clock read/write, compression, and RAM-to-ROM copy | `snap7/client.py`, `s7protocol.py` | Done — [management](../src/client/management.rs), [wire codecs](../src/protocol/management.rs), [tests](../tests/management.rs) |
 | F17 | Block listing/metadata, offline block inspection, upload/full upload, download, and deletion | `snap7/client.py`, `client_base.py`, `s7protocol.py` | In progress — DB metadata sizing implemented for F07; remaining block services pending |
 | F18 | Session password encoding, setting/clearing, and authentication errors | `snap7/client.py`, `s7protocol.py` | Done — [security](../src/client/security.rs), [tests](../tests/security.rs) |
-| F19 | I/O force-bit operations, cancellation, and force-table reads | `snap7/client.py`, `async_client.py` | Todo |
+| F19 | I/O force-bit operations, cancellation, and force-table reads | `snap7/client.py`, `async_client.py` | Done — [I/O operations](../src/client/force.rs), [table parser](../src/szl.rs), [tests](../tests/memory.rs), [table tests](../tests/diagnostics.rs) |
 | F20 | Typed tags: PLC4X/STEP7 and nodeS7 syntax, strict parsing, read/write/batch reads, CSV/JSON/TIA XML imports, and browse-result conversion | `snap7/tags.py`, `client.py` | Todo |
 | F21 | DB layout specifications, row access, change tracking, export, and selective reads/writes | `snap7/util/db.py` | Todo |
 

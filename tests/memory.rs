@@ -289,3 +289,20 @@ fn batch_reads_and_writes_preserve_item_results() {
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }
+
+/// I/O forcing uses process-image read/modify/write and preserves adjacent bits.
+#[test]
+fn force_and_cancel_preserve_neighbors() {
+    use rs_snap7::Area;
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    client.eb_write(0, &[0xaa]).unwrap();
+    client.force_bit(Area::Inputs, 0, 0, true).unwrap();
+    assert_eq!(client.eb_read(0, 1).unwrap(), [0xab]);
+    client.cancel_force(Area::Inputs, 0, 1).unwrap();
+    assert_eq!(client.eb_read(0, 1).unwrap(), [0xa9]);
+    assert!(client.force_bit(Area::Db, 0, 0, true).is_err());
+    assert!(client.force_bit(Area::Outputs, 0, 8, true).is_err());
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}

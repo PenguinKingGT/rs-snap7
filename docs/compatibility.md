@@ -51,3 +51,8 @@ and failure behavior. No PLC hardware has been validated yet.
   `set_plc_system_datetime()` sends UTC explicitly rather than Python host-local
   time. Applications should pass a `DateTime` for the PLC's local convention.
   Control and password changes are never automatically replayed.
+
+- `force_bit` and `cancel_force` modify process-image bits, matching upstream;
+  they do not establish persistent CPU forces. Force-table reads propagate
+  communication errors and only treat explicit unsupported-service responses
+  as an empty list. Invalid table records are rejected rather than truncated.
