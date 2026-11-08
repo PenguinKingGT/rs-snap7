@@ -32,7 +32,7 @@ impl Drop for Guard<'_> {
 }
 
 impl Session {
-    /// Drive the exact same pure machine as the blocking adapter, without replay.
+    /// Drive the pure transfer machine once, without replay after transmission.
     pub(in crate::client) async fn transfer<T: Transfer>(
         &mut self,
         mut machine: T,

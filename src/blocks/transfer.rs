@@ -17,7 +17,7 @@ pub(crate) enum Action {
     Done,
 }
 
-/// Internal seam shared by blocking and native async transfer drivers.
+/// Pure transfer state machine driven by the async session.
 pub(crate) trait Transfer {
     /// Successful operation result.
     type Output;

@@ -310,7 +310,8 @@ impl ConnectionHook {
     pub fn new(callback: impl Fn(ConnectionEvent) + Send + Sync + 'static) -> Self {
         Self {
             callback: Some(std::sync::Arc::new(callback)),
-            ..Default::default()
+            #[cfg(feature = "blocking")]
+            delivery: None,
         }
     }
     /// Whether an application sink requires a blocking delivery adapter.

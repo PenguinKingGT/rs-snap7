@@ -8,12 +8,7 @@ use rs_snap7::{
     blocking::Client,
     protocol::{Pdu, PduType},
 };
-use std::{
-    net::TcpListener,
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use std::{net::TcpListener, thread, time::Duration};
 
 /// Context rejection happens before a TCP accept, even when config is otherwise valid.
 #[tokio::test(flavor = "current_thread")]
@@ -91,6 +86,7 @@ mod server_scenarios {
         observability::OperationHook,
         server::{Server, ServerConfig},
     };
+    use std::sync::{Arc, Mutex};
 
     /// Create bounded local memory without a PLC.
     fn server() -> Server {

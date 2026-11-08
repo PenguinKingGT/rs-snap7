@@ -66,7 +66,8 @@ impl OperationHook {
     pub fn new(callback: impl Fn(OperationEvent) + Send + Sync + 'static) -> Self {
         Self {
             callback: Some(Arc::new(callback)),
-            ..Default::default()
+            #[cfg(feature = "blocking")]
+            delivery: None,
         }
     }
     /// Whether a sink needs deferred blocking delivery.
