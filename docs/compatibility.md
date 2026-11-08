@@ -45,3 +45,9 @@ and failure behavior. No PLC hardware has been validated yet.
   the Python baseline's unconditional RUN result. The wire interpretation was
   checked against the native [Snap7 status operation](https://github.com/SCADACS/snap7/blob/master/src/core/s7_micro_client.cpp).
   No native implementation code is incorporated or linked.
+
+- PLC control validates the acknowledged function. Clock reads accept native
+  ten-byte and legacy eight-byte layouts; writes use the upstream native form.
+  `set_plc_system_datetime()` sends UTC explicitly rather than Python host-local
+  time. Applications should pass a `DateTime` for the PLC's local convention.
+  Control and password changes are never automatically replayed.

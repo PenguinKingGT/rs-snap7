@@ -3,6 +3,8 @@
 //! Wire layouts follow the pinned python-snap7 implementation. No function in
 //! this module opens sockets or changes session state.
 
+pub mod management;
+
 use crate::{Address, Error, Result, WordLen};
 
 /// Maximum variables in one classic S7 read/write job.
