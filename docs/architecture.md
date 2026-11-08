@@ -21,6 +21,8 @@ independent consumers or release requirements justify them. Re-export primary
 client, configuration, address, and error types from `lib.rs`; keep wire details
 and execution machinery private by default. The implemented `transport` module
 is an explicit advanced interface for raw ISO-on-TCP consumers and protocol tests.
+`protocol` exposes pure PDU models/codecs for custom services and independent peers;
+client execution and session coordination remain internal.
 
 | Planned module | Responsibility | Migration features |
 | --- | --- | --- |
