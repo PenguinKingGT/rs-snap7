@@ -75,3 +75,5 @@ cargo test --doc --all-features
 
 Cancelling a transmitted operation invalidates its connection. A cancelled write
 may already have executed on the PLC; reconnect explicitly before further work.
+
+Typed tags support PLC4X/nodeS7 parsing, checked values and sync/async I/O. Enable `tag-import` for CSV/JSON/TIA XML text imports; symbolic metadata does not enable symbolic PLC access.

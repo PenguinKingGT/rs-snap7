@@ -211,3 +211,11 @@ until all features exist. No numerical coverage threshold is set yet; each featu
 needs normal, boundary, and failure assertions plus relevant documentation before
 its tracker status becomes `Done`. Record public interface, concurrency, or runtime
 changes here and keep feature progress in the migration tracker.
+
+## Implemented Tag Tools
+
+The runtime-independent tags module owns validated addresses, data types and
+dynamic values. Blocking/async clients share parsing and encoding, with BOOL
+read/modify/write under one session guard. Metadata import is isolated behind
+tag-import (csv, serde_json, roxmltree; MIT-compatible licenses); callers supply
+text, and symbolic metadata never falls back to a classic byte address.

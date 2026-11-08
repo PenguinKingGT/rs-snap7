@@ -70,3 +70,5 @@ cargo test --doc --all-features
 
 取消已经发送的操作会使连接失效。被取消的写入可能已经在 PLC 上执行，
 后续操作前应显式重新连接。
+
+类型化标签支持 PLC4X/nodeS7 解析、数值校验和同步/异步读写。启用 `tag-import` 可导入 CSV/JSON/TIA XML 文本；符号元数据不代表支持符号 PLC 访问。

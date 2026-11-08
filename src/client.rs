@@ -7,6 +7,7 @@ mod force;
 mod heartbeat;
 mod management;
 mod security;
+mod tags;
 mod typed;
 
 use crate::protocol::{Pdu, PduType};

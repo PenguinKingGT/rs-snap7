@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **20 of 28 migration features are Done.**
+The Rust library scaffold is complete. **21 of 28 migration features are Done.**
 Core clients, codecs, batching/optimization, recovery, limits, events, diagnostics, and management operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -48,7 +48,7 @@ Start here; later groups build on these capabilities.
 | F17 | Block listing/metadata, offline block inspection, upload/full upload, download, and deletion | `snap7/client.py`, `client_base.py`, `s7protocol.py` | Done — [block models/state machines](../src/blocks/mod.rs), [wire services](../src/protocol/blocks.rs), [blocking](../src/client/blocks.rs)/[async](../src/async_client/blocks.rs) adapters, [tests](../tests/blocks.rs) |
 | F18 | Session password encoding, setting/clearing, and authentication errors | `snap7/client.py`, `s7protocol.py` | Done — [security](../src/client/security.rs), [tests](../tests/security.rs) |
 | F19 | I/O force-bit operations, cancellation, and force-table reads | `snap7/client.py`, `async_client.py` | Done — [I/O operations](../src/client/force.rs), [table parser](../src/szl.rs), [tests](../tests/memory.rs), [table tests](../tests/diagnostics.rs) |
-| F20 | Typed tags: PLC4X/STEP7 and nodeS7 syntax, strict parsing, read/write/batch reads, CSV/JSON/TIA XML imports, and browse-result conversion | `snap7/tags.py`, `client.py` | Todo |
+| F20 | Typed tags: PLC4X/STEP7 and nodeS7 syntax, strict parsing, read/write/batch reads, CSV/JSON/TIA XML imports, and browse-result conversion | `snap7/tags.py`, `client.py` | Done — [tags](../src/tags/mod.rs), [imports](../src/tags/import.rs), [tests](../tests/tags.rs) and sync/async I/O in memory tests |
 | F21 | DB layout specifications, row access, change tracking, export, and selective reads/writes | `snap7/util/db.py` | Todo |
 
 ## 3. Additional Products & Validation

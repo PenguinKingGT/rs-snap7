@@ -28,6 +28,7 @@ pub mod pool;
 pub mod protocol;
 mod session;
 pub mod szl;
+pub mod tags;
 pub mod transport;
 pub mod types;
 

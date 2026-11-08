@@ -116,3 +116,20 @@ and failure behavior. No PLC hardware has been validated yet.
   fields (including load size at offset 8 and MC7 size at offset 34), retaining
   raw timestamp bytes. It deliberately replaces the Python helper's inconsistent
   field offsets and hard-coded dates rather than reproducing invented metadata.
+
+## Typed tags
+
+Tag types, ranges, array counts and complete addresses are validated at creation.
+Strict autodetection requires a colon/comma; explicit nodeS7 parsing also accepts
+bare area shortcuts. Canonical Display uses PLC4X syntax. BOOL arrays retain the
+upstream one-byte stride and clients preserve neighboring bits under one guard.
+Dynamic Value variants preserve integer signedness, f32/f64 widths and temporal
+units. S5TIME writes remain unsupported. Arrays of strings are handled consistently.
+
+The optional tag-import feature reads CSV, JSON and TIA XML text; callers own file
+I/O. TIA leaves require explicit absolute offsets rather than assuming zero or
+inferring a compiler layout. Nested members get qualified names. Numeric fractional
+JSON offsets must be strings to avoid floating-point bit-address rounding.
+Symbolic paths and browse metadata are retained but classic I/O rejects them.
+Tag batches preserve order and per-item errors through sequential tag reads;
+use read_multi_vars for optimized packet batching.

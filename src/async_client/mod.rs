@@ -27,6 +27,7 @@ mod security;
 mod session;
 mod transport;
 pub use pool::AsyncClientPool;
+mod tags;
 mod typed;
 
 use self::session::Session;

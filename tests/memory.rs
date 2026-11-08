@@ -656,3 +656,63 @@ async fn async_logical_events_are_not_duplicated_by_nested_calls() {
     client.disconnect().await.unwrap();
     peer.worker.join().unwrap();
 }
+
+/// Tags retain scalar types, batch item outcomes, and neighboring BOOL bits.
+#[test]
+fn tag_io_encodes_before_sending_and_preserves_neighbors() {
+    use rs_snap7::tags::{DataType, Tag, Value};
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    let integer: Tag = "DB1:2:INT".parse().unwrap();
+    client.write_tag(&integer, &Value::Signed(-123)).unwrap();
+    assert_eq!(client.read_tag(&integer).unwrap(), Value::Signed(-123));
+    client.db_write(1, 10, &[0xaa, 0x55, 0xff]).unwrap();
+    let bits: Tag = "DB1:10.3:BOOL[3]".parse().unwrap();
+    client
+        .write_tag(
+            &bits,
+            &Value::Array(vec![
+                Value::Bool(false),
+                Value::Bool(true),
+                Value::Bool(false),
+            ]),
+        )
+        .unwrap();
+    assert_eq!(client.db_read(1, 10, 3).unwrap(), [0xa2, 0x5d, 0xf7]);
+    assert!(client.write_tag(&integer, &Value::Signed(99999)).is_err());
+    let invalid = Tag::from_access_string("8A0E0001.A", DataType::Int, 1, 0).unwrap();
+    assert!(client.read_tag(&invalid).is_err());
+    let missing: Tag = "DB1:1024:BYTE".parse().unwrap();
+    let result = client.read_tags(&[integer, missing]).unwrap();
+    assert!(result[0].is_ok());
+    assert!(matches!(result[1], Err(Error::Item(5))));
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}
+
+#[cfg(feature = "async")]
+#[tokio::test]
+async fn async_tag_io_matches_blocking_and_rejects_before_network() {
+    use rs_snap7::{
+        AsyncClient,
+        tags::{Tag, Value},
+    };
+    let peer = Peer::new(None, None);
+    let client = AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let tag: Tag = "DB1:0:REAL[3]".parse().unwrap();
+    let value = Value::Array(vec![Value::Real(1.5), Value::Real(-2.0), Value::Real(3.0)]);
+    client.write_tag(&tag, &value).await.unwrap();
+    assert_eq!(
+        client.read_tags(&[tag]).await.unwrap().remove(0).unwrap(),
+        value
+    );
+    client.db_write(1, 20, &[0xf0]).await.unwrap();
+    let bit: Tag = "DB1:20.0:BOOL".parse().unwrap();
+    client.write_tag(&bit, &Value::Bool(true)).await.unwrap();
+    assert_eq!(client.db_read(1, 20, 1).await.unwrap(), [0xf1]);
+    assert!(client.write_tag(&bit, &Value::Signed(1)).await.is_err());
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
