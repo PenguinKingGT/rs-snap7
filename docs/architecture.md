@@ -177,8 +177,10 @@ TCP. Introduce optional capabilities only with their implementations:
 
 LOGO!, tag parsing, and DB layout helpers can reuse the core without a runtime
 dependency. Select external crates and minimum supported Rust version when each
-capability is implemented, after checking licensing and platform support. No
-dependency or feature in this table is configured today. CI should eventually
+capability is implemented, after checking licensing and platform support. The `async` feature is now configured with optional Tokio; other entries remain
+planned. Tokio socket I/O and absolute timeouts follow its
+[transport](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html) and
+[timeout](https://docs.rs/tokio/latest/tokio/time/fn.timeout_at.html) interfaces. CI should eventually
 check default, no-default, all-compatible, and individual optional feature builds.
 
 ## Test Architecture & Delivery

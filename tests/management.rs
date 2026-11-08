@@ -126,3 +126,58 @@ fn control_and_clock_client_exchanges() {
     client.disconnect().unwrap();
     peer.join().unwrap();
 }
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_control_and_clock_client_exchanges() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
+    let peer = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        negotiate(&mut stream, 480);
+        for _ in 0..8 {
+            let job = Pdu::decode(&read_frame(&mut stream)[3..]).unwrap();
+            let response = if job.kind == PduType::Job {
+                Pdu {
+                    kind: PduType::AckData,
+                    reference: job.reference,
+                    error: 0,
+                    parameters: vec![job.parameters[0]],
+                    data: vec![],
+                }
+            } else {
+                let sub = job.parameters[6];
+                let data = if sub == 1 {
+                    vec![
+                        0xff, 9, 0, 10, 0, 0x19, 0x20, 7, 0x12, 0x17, 0x32, 2, 0x85, 0x41,
+                    ]
+                } else {
+                    vec![0x0a, 0, 0, 0]
+                };
+                Pdu {
+                    kind: PduType::UserData,
+                    reference: job.reference,
+                    error: 0,
+                    parameters: vec![0, 1, 0x12, 8, 0x12, 0x87, sub, 0, 0, 0, 0, 0],
+                    data,
+                }
+            };
+            let mut raw = vec![2, 0xf0, 0x80];
+            raw.extend(response.encode().unwrap());
+            send_frame(&mut stream, &raw);
+        }
+        read_frame(&mut stream);
+    });
+    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    client.plc_stop().await.unwrap();
+    client.plc_hot_start().await.unwrap();
+    client.plc_cold_start().await.unwrap();
+    client.compress().await.unwrap();
+    client.copy_ram_to_rom().await.unwrap();
+    let clock = client.get_plc_datetime().await.unwrap();
+    client.set_plc_datetime(clock).await.unwrap();
+    client.set_plc_system_datetime().await.unwrap();
+    client.disconnect().await.unwrap();
+    peer.join().unwrap();
+}

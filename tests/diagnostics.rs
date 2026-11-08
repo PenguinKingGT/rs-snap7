@@ -202,3 +202,95 @@ fn force_table_layout_and_rejected_records() {
         assert!(parse_force_table(&invalid).is_err());
     }
 }
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_fragmented_szl_and_client_information_methods() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
+    let peer = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        negotiate(&mut stream, 128);
+        loop {
+            let raw = read_frame(&mut stream);
+            if raw[1] == 0x80 {
+                break;
+            }
+            let mut job = Pdu::decode(&raw[3..]).unwrap();
+            assert_eq!(&job.parameters[..7], &[0, 1, 0x12, 4, 0x11, 0x44, 1]);
+            let id = u16::from_be_bytes([job.data[4], job.data[5]]);
+            let index = u16::from_be_bytes([job.data[6], job.data[7]]);
+            assert_eq!(index, 0);
+            let body = match id {
+                0x1c => {
+                    let mut b = vec![0; 208];
+                    b[6..9].copy_from_slice(b"PLC");
+                    b
+                }
+                0x424 => vec![0, 0, 0, 0, 0, 0, 0, 4],
+                0x131 => vec![1, 224, 0, 8, 0, 3, 0, 4],
+                0x232 => vec![0, 1, 0, 2, 0, 3, 0, 4, 0, 5],
+                0xa0 => vec![0; 20],
+                0x25 => vec![0, 0x81, 0, 10, 3, 1, 0, 0],
+                0 => vec![0, 2, 0, 1, 0, 0x1c],
+                _ => unreachable!(),
+            };
+            let parts: Vec<_> = body.chunks(70).collect();
+            for (n, part) in parts.iter().enumerate() {
+                let more = n + 1 < parts.len();
+                let mut payload = Vec::new();
+                if n == 0 {
+                    payload.extend_from_slice(&id.to_be_bytes());
+                    payload.extend_from_slice(&index.to_be_bytes());
+                }
+                payload.extend_from_slice(part);
+                let mut data = vec![0xff, 9];
+                data.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+                data.extend(payload);
+                let reply = Pdu {
+                    kind: PduType::UserData,
+                    reference: job.reference,
+                    error: 0,
+                    parameters: vec![
+                        0,
+                        1,
+                        0x12,
+                        8,
+                        0x12,
+                        0x84,
+                        1,
+                        (n + 1) as u8,
+                        0,
+                        u8::from(more),
+                        0,
+                        0,
+                    ],
+                    data,
+                };
+                let mut raw = vec![2, 0xf0, 0x80];
+                raw.extend(reply.encode().unwrap());
+                send_frame(&mut stream, &raw);
+                if more {
+                    job = Pdu::decode(&read_frame(&mut stream)[3..]).unwrap();
+                    assert_eq!(
+                        job.parameters,
+                        [0, 1, 0x12, 8, 0x12, 0x44, 1, (n + 1) as u8, 0, 0, 0, 0]
+                    );
+                }
+            }
+        }
+    });
+    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    assert_eq!(client.get_cpu_info().await.unwrap().as_name, "PLC");
+    assert_eq!(client.get_cpu_state().await.unwrap(), CpuState::Stop);
+    assert_eq!(client.get_cp_info().await.unwrap().max_pdu_length, 480);
+    assert_eq!(client.get_protection().await.unwrap().effective, 3);
+    assert_eq!(client.read_diagnostic_buffer().await.unwrap().len(), 1);
+    assert_eq!(client.read_szl_list().await.unwrap(), [0, 2, 0, 1, 0, 0x1c]);
+    let table = client.read_force_table().await.unwrap();
+    assert_eq!(table[0].byte_offset, 10);
+    assert!(table[0].value);
+    client.disconnect().await.unwrap();
+    peer.join().unwrap();
+}

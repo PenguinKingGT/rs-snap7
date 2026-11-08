@@ -18,3 +18,8 @@ pub use client::{Client, ClientConfig};
 pub use error::{Error, Result};
 pub use logo::Logo;
 pub use types::{Address, Area, BlockType, CpuState, Parameter, ServerArea, WordLen};
+
+#[cfg(feature = "async")]
+pub mod async_client;
+#[cfg(feature = "async")]
+pub use async_client::AsyncClient;

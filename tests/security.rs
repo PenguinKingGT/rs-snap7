@@ -99,3 +99,49 @@ fn password_set_clear_and_rejection_over_tcp() {
     client.disconnect().unwrap();
     peer.join().unwrap();
 }
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_password_set_clear_and_rejection_over_tcp() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
+    let peer = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        negotiate(&mut stream, 480);
+        for (sub, error) in [(1, 0u16), (2, 0), (1, 0xd602)] {
+            let request = read_frame(&mut stream);
+            let pdu = Pdu::decode(&request[3..]).unwrap();
+            assert_eq!(pdu.parameters, [0, 1, 0x12, 4, 0x11, 0x45, sub, 0]);
+            if sub == 1 {
+                assert_eq!(&pdu.data[4..], &[6, 16, 16, 23, 0, 22, 117, 99]);
+            } else {
+                assert_eq!(pdu.data, [0x0a, 0, 0, 0]);
+            }
+            let mut params = vec![0, 1, 0x12, 8, 0x12, 0x85, sub, 0, 0, 0];
+            params.extend_from_slice(&error.to_be_bytes());
+            let response = Pdu {
+                kind: PduType::UserData,
+                reference: pdu.reference,
+                error: 0,
+                parameters: params,
+                data: vec![0x0a, 0, 0, 0],
+            };
+            let mut frame = vec![2, 0xf0, 0x80];
+            frame.extend(response.encode().unwrap());
+            send_frame(&mut stream, &frame);
+        }
+        read_frame(&mut stream);
+    });
+    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    assert!(client.set_session_password("").await.is_err());
+    client.set_session_password("SECRET").await.unwrap();
+    client.clear_session_password().await.unwrap();
+    assert!(matches!(
+        client.set_session_password("SECRET").await,
+        Err(Error::Authentication(0xd602))
+    ));
+    assert!(client.is_connected().await);
+    client.disconnect().await.unwrap();
+    peer.join().unwrap();
+}

@@ -328,3 +328,201 @@ fn logo_signed_values_and_preserved_vm_bits() {
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_chunked_db_read_write_get_and_fill() {
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let bytes: Vec<u8> = (0..600).map(|i| i as u8).collect();
+    client.db_write(1, 10, &bytes).await.unwrap();
+    assert_eq!(client.db_read(1, 10, 600).await.unwrap(), bytes);
+    assert_eq!(&peer.memory.lock().unwrap()[10..610], bytes);
+    assert_eq!(client.db_get(1, None).await.unwrap().len(), 1024);
+    client.db_fill(1, 0xab, Some(600)).await.unwrap();
+    assert_eq!(client.db_get(1, Some(600)).await.unwrap(), vec![0xab; 600]);
+    client.db_fill(1, 0x55, None).await.unwrap();
+    assert_eq!(client.db_get(1, None).await.unwrap(), vec![0x55; 1024]);
+    assert_eq!(client.db_read(1, 0, 0).await.unwrap(), Vec::<u8>::new());
+    client.db_write(1, 0, &[]).await.unwrap();
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_area_helpers_and_timer_counter_units() {
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    client.ct_write(2, &[1, 2, 3, 4]).await.unwrap();
+    assert_eq!(client.ct_read(2, 2).await.unwrap(), [1, 2, 3, 4]);
+    client.tm_write(4, &[5, 6]).await.unwrap();
+    assert_eq!(client.tm_read(4, 1).await.unwrap(), [5, 6]);
+    client.mb_write(0, &[7, 8]).await.unwrap();
+    assert_eq!(client.mb_read(0, 2).await.unwrap(), [7, 8]);
+    client.ab_write(0, &[9]).await.unwrap();
+    assert_eq!(client.ab_read(0, 1).await.unwrap(), [9]);
+    client.eb_write(0, &[10]).await.unwrap();
+    assert_eq!(client.eb_read(0, 1).await.unwrap(), [10]);
+    assert!(client.ct_write(0, &[1]).await.is_err());
+    assert!(client.db_read(1, u32::MAX, 1).await.is_err());
+    assert!(client.db_read(1, 0, usize::MAX).await.is_err());
+    assert!(client.db_write(1, 0x1fffff, &[0, 0]).await.is_err());
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_partial_write_reports_acknowledged_bytes() {
+    let peer = Peer::new(Some(2), None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let error = client.db_write(1, 0, &[7; 300]).await.unwrap_err();
+    assert!(matches!(error, Error::PartialWrite { confirmed: 100, .. }));
+    assert_eq!(
+        &peer.memory.lock().unwrap()[..101],
+        &[vec![7; 100], vec![0]].concat()
+    );
+    assert!(client.is_connected().await);
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_lost_write_ack_reports_uncertain_range() {
+    let peer = Peer::new(None, Some(2));
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let error = client.db_write(1, 0, &[7; 300]).await.unwrap_err();
+    assert!(matches!(
+        error,
+        Error::AmbiguousWrite {
+            confirmed: 100,
+            uncertain: 100,
+            ..
+        }
+    ));
+    assert!(!client.is_connected().await);
+    peer.worker.join().unwrap();
+}
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_typed_scalars_arrays_and_strings_roundtrip() {
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    client.db_write_int(1, 0, i16::MIN).await.unwrap();
+    assert_eq!(client.db_read_int(1, 0).await.unwrap(), i16::MIN);
+    client.db_write_lreal(1, 2, -123.25).await.unwrap();
+    assert_eq!(client.db_read_lreal(1, 2).await.unwrap(), -123.25);
+    let array: Vec<i32> = (-60..60).collect();
+    client.db_write_array(1, 10, &array).await.unwrap();
+    assert_eq!(
+        client.db_read_array::<i32>(1, 10, 120).await.unwrap(),
+        array
+    );
+    assert!(client.db_read_array::<u64>(1, 0, usize::MAX).await.is_err());
+    client.db_write_string(1, 500, "hé", 10).await.unwrap();
+    assert_eq!(client.db_read_string(1, 500).await.unwrap(), "hé");
+    client.db_write_wstring(1, 520, "中文", 10).await.unwrap();
+    assert_eq!(client.db_read_wstring(1, 520).await.unwrap(), "中文");
+    assert!(client.db_write_string(1, 0, "long", 1).await.is_err());
+    assert!(client.db_write_wstring(1, 0, "😀", 10).await.is_err());
+    client.db_write(1, 550, &[1, 2]).await.unwrap();
+    assert!(client.db_read_string(1, 550).await.is_err());
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_batch_reads_and_writes_preserve_item_results() {
+    use rs_snap7::Address;
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let first = Address::db(1, 10, 301).unwrap();
+    let second = Address::db(1, 500, 3).unwrap();
+    let invalid = Address::db(1, 2000, 1).unwrap();
+    let writes = client
+        .write_multi_vars(&[(first, &[0x33; 301]), (invalid, &[7]), (second, &[1, 2, 3])])
+        .await
+        .unwrap();
+    assert!(writes[0].is_ok());
+    assert!(matches!(writes[1], Err(Error::Item(5))));
+    assert!(writes[2].is_ok());
+    let reads = client
+        .read_multi_vars(&[second, invalid, first])
+        .await
+        .unwrap();
+    assert_eq!(reads[0].as_ref().unwrap(), &[1, 2, 3]);
+    assert!(matches!(reads[1], Err(Error::Item(5))));
+    assert_eq!(reads[2].as_ref().unwrap(), &vec![0x33; 301]);
+    assert!(client.read_multi_vars(&[second; 21]).await.is_err());
+    assert!(client.write_multi_vars(&[(second, &[0])]).await.is_err());
+    assert!(client.read_multi_vars(&[]).await.unwrap().is_empty());
+    assert!(client.write_multi_vars(&[]).await.unwrap().is_empty());
+    let reads = client.read_multi_vars(&[second; 20]).await.unwrap();
+    assert!(reads.into_iter().all(|r| r.unwrap() == [1, 2, 3]));
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Native async counterpart of the blocking compatibility scenario.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_force_and_cancel_preserve_neighbors() {
+    use rs_snap7::Area;
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    client.eb_write(0, &[0xaa]).await.unwrap();
+    client.force_bit(Area::Inputs, 0, 0, true).await.unwrap();
+    assert_eq!(client.eb_read(0, 1).await.unwrap(), [0xab]);
+    client.cancel_force(Area::Inputs, 0, 1).await.unwrap();
+    assert_eq!(client.eb_read(0, 1).await.unwrap(), [0xa9]);
+    assert!(client.force_bit(Area::Db, 0, 0, true).await.is_err());
+    assert!(client.force_bit(Area::Outputs, 0, 8, true).await.is_err());
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Async clones serialize bit updates while yielding during network waits.
+#[cfg(feature = "async")]
+#[tokio::test(flavor = "current_thread")]
+async fn async_concurrent_bit_updates_preserve_neighbors() {
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let workers: Vec<_> = (0..8)
+        .map(|bit| {
+            let other = client.clone();
+            tokio::spawn(async move { other.db_write_bool(1, 0, bit, true).await.unwrap() })
+        })
+        .collect();
+    for worker in workers {
+        worker.await.unwrap();
+    }
+    assert_eq!(client.db_read_byte(1, 0).await.unwrap(), 255);
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}

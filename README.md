@@ -8,7 +8,7 @@ See the [migration tracker](docs/migration.md) for planned features and progress
 The [architecture design](docs/architecture.md) describes module responsibilities
 and implementation rules.
 
-The blocking client supports classic S7 connections, raw and typed memory
+Blocking and optional native asynchronous clients support classic S7 connections, raw and typed memory
 operations, DB helpers, and multi-variable reads/writes. Hardware validation is
 still pending; consult the tracker for remaining capabilities. The package is named `rs-snap7`, its Rust crate name is
 `rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
@@ -59,3 +59,17 @@ fn main() -> rs_snap7::Result<()> {
 ```
 
 See [compatibility notes](docs/compatibility.md) for deliberate interface changes.
+
+## Native Async Support
+
+Enable the `async` Cargo feature to use `AsyncClient` with a Tokio runtime that
+has I/O and timers enabled. Its supported operation names match `Client`, with
+`.await` at each call. Test this configuration with:
+
+```sh
+cargo test --all-targets --all-features
+cargo test --doc --all-features
+```
+
+Cancelling a transmitted operation invalidates its connection. A cancelled write
+may already have executed on the PLC; reconnect explicitly before further work.

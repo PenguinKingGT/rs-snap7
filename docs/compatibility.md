@@ -61,3 +61,9 @@ and failure behavior. No PLC hardware has been validated yet.
   matches. VW/VD retain signed values. The adapter preserves explicit TSAPs and
   delegates lifecycle/operations to its standard client; automatic recovery is
   still tracked under F11/F23.
+
+- Native `AsyncClient` requires the optional `async` feature and a Tokio runtime
+  with I/O/time enabled. Supported blocking operations have asynchronous
+  counterparts, sharing codecs and packet planning. Dropping an in-flight
+  transaction future closes its socket; cancellation during a write has an
+  unknown remote outcome and must not be treated as a confirmed failure.

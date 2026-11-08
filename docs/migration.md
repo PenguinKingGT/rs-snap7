@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **13 of 28 migration features are Done.**
+The Rust library scaffold is complete. **14 of 28 migration features are Done.**
 Foundation types, codecs, transport, protocol, client sessions, and raw memory operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -31,7 +31,7 @@ Start here; later groups build on these capabilities.
 | F05 | S7 PDU encoding/decoding, negotiation, request references, stale/lost response detection, and malformed-packet rejection | `snap7/s7protocol.py` | Done — [protocol](../src/protocol.rs), [tests](../tests/protocol.rs) |
 | F06 | Synchronous client lifecycle, connection parameters, rack/slot, routed connections, and raw ISO exchange | `snap7/client.py`, `client_base.py` | Done — [client](../src/client.rs), [session](../src/session.rs), [tests](../tests/client.rs) |
 | F07 | Raw DB/area reads and writes, DB get/fill, I/O/marker/timer/counter helpers, and large-transfer chunking | `snap7/client.py` | Done — [operations](../src/operations.rs), [client](../src/client.rs), [tests](../tests/memory.rs) |
-| F08 | Typed scalar and array DB reads/writes, including bit-preserving updates | `snap7/client.py`, `async_client.py` | Done — [typed operations](../src/client/typed.rs), [tests](../tests/memory.rs); async exposure tracked in F12 |
+| F08 | Typed scalar and array DB reads/writes, including bit-preserving updates | `snap7/client.py`, `async_client.py` | Done — [typed operations](../src/client/typed.rs), [tests](../tests/memory.rs); blocking and async exposure implemented in F12 |
 | F09 | Multi-variable reads/writes, item limits, PDU splitting, and per-item errors | `snap7/client.py`, `s7protocol.py` | Done — [batch operations](../src/client/batch.rs), [packet planner](../src/planner.rs), [tests](../tests/memory.rs) |
 
 ## 2. Client Capabilities & Data Tools
@@ -40,7 +40,7 @@ Start here; later groups build on these capabilities.
 | --- | --- | --- | --- |
 | F10 | Read planning: sorting, merging, packetization, result extraction, plan caching, and parallel dispatch | `snap7/optimizer.py`, `client.py` | Todo |
 | F11 | Connection recovery: bounded retries, exponential backoff/jitter, heartbeat, and disconnect/reconnect hooks | `snap7/client.py` | Todo |
-| F12 | Native asynchronous client with supported operation parity, serialized/concurrent request handling, and cleanup | `snap7/async_client.py` | Todo |
+| F12 | Native asynchronous client with supported operation parity, serialized/concurrent request handling, and cleanup | `snap7/async_client.py` | Done — [native async client](../src/async_client/mod.rs), [cancellation tests](../tests/async_client.rs), sync/async parity scenarios in `tests/` |
 | F13 | Request limiting: fixed spacing/token bucket, bursts, blocking/rejection, sync/async integration | `snap7/rate_limiter.py` | Todo |
 | F14 | Contextual/structured logging, operation timing/hooks, execution time, and last-error reporting | `snap7/log.py`, `client.py`, `client_base.py` | Todo |
 | F15 | CPU/CP/order/protection information, CPU state, SZL lists, fragmented SZL reads, and diagnostic buffer | `snap7/szl.py`, `client.py`, `s7protocol.py` | Done — [SZL models](../src/szl.rs), [diagnostics](../src/client/diagnostics.rs), [tests](../tests/diagnostics.rs) |

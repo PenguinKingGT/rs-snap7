@@ -7,7 +7,7 @@
 待实现功能与进度见[迁移清单](docs/migration.md)。
 模块职责与实现约定见[架构设计](docs/architecture.md)。
 
-同步客户端已支持经典 S7 连接、原始及类型化内存读写、DB 辅助操作与多变量批量读写。
+同步客户端及可选的原生异步客户端已支持经典 S7 连接、原始及类型化内存读写、DB 辅助操作与多变量批量读写。
 尚未验证真实 PLC，其他能力进度见迁移清单。包名为
 `rs-snap7`，Rust 代码中的 crate 名为 `rs_snap7`，采用 Rust 2024 edition。
 项目使用 MIT 许可证；上游署名见 `LICENSE` 与 `NOTICE`。发布暂未启用。
@@ -55,3 +55,17 @@ fn main() -> rs_snap7::Result<()> {
 ```
 
 有意调整的接口和行为见[兼容性说明](docs/compatibility.md)。
+
+## 原生异步支持
+
+启用 Cargo feature `async` 后可使用 `AsyncClient`，运行于开启 I/O 和计时器的
+Tokio 运行时。已支持的操作名称与 `Client` 对应，每次调用使用 `.await`。
+使用以下命令验证此配置：
+
+```sh
+cargo test --all-targets --all-features
+cargo test --doc --all-features
+```
+
+取消已经发送的操作会使连接失效。被取消的写入可能已经在 PLC 上执行，
+后续操作前应显式重新连接。

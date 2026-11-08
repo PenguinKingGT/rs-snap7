@@ -222,7 +222,7 @@ impl Drop for Connection {
 }
 
 /// Encode the calling/called TSAP and optional route into a COTP CR.
-fn connection_request(config: &TransportConfig) -> Result<Vec<u8>> {
+pub(crate) fn connection_request(config: &TransportConfig) -> Result<Vec<u8>> {
     config.validate()?;
     let mut pdu = vec![0, 0xe0, 0, 0, 0, 1, 0, 0xc1, 2];
     pdu.extend_from_slice(&config.local_tsap.to_be_bytes());
@@ -242,7 +242,7 @@ fn connection_request(config: &TransportConfig) -> Result<Vec<u8>> {
 }
 
 /// Validate the peer reference and parameter TLVs without trusting length fields.
-fn parse_confirm(pdu: &[u8], requested: usize) -> Result<(u16, usize)> {
+pub(crate) fn parse_confirm(pdu: &[u8], requested: usize) -> Result<(u16, usize)> {
     if pdu.len() < 7
         || usize::from(pdu[0]) + 1 != pdu.len()
         || pdu[1] != 0xd0
@@ -296,11 +296,7 @@ fn remaining(deadline: Instant) -> Result<Duration> {
 pub(crate) fn read_frame(stream: &mut TcpStream, deadline: Instant) -> Result<Vec<u8>> {
     let mut header = [0; 4];
     read_exact(stream, &mut header, deadline)?;
-    let len = usize::from(u16::from_be_bytes([header[2], header[3]]));
-    if header[0] != 3 || header[1] != 0 || len < 7 {
-        return Err(Error::Protocol("invalid TPKT header"));
-    }
-    let mut payload = vec![0; len - 4];
+    let mut payload = vec![0; frame_payload_len(header)?];
     read_exact(stream, &mut payload, deadline)?;
     Ok(payload)
 }
@@ -323,13 +319,7 @@ fn read_exact(stream: &mut TcpStream, mut target: &mut [u8], deadline: Instant) 
 
 /// Write a TPKT frame without permitting a truncated 16-bit length.
 pub(crate) fn write_frame(stream: &mut TcpStream, payload: &[u8], deadline: Instant) -> Result<()> {
-    if !(3..=65531).contains(&payload.len()) {
-        return Err(Error::InvalidInput("invalid TPKT payload size"));
-    }
-    let len = (payload.len() + 4) as u16;
-    let mut frame = vec![3, 0];
-    frame.extend_from_slice(&len.to_be_bytes());
-    frame.extend_from_slice(payload);
+    let frame = frame_bytes(payload)?;
     let mut remaining_bytes = frame.as_slice();
     while !remaining_bytes.is_empty() {
         stream.set_write_timeout(Some(remaining(deadline)?))?;
@@ -341,6 +331,26 @@ pub(crate) fn write_frame(stream: &mut TcpStream, payload: &[u8], deadline: Inst
         }
     }
     Ok(())
+}
+
+/// Shared strict TPKT header validation for blocking and async adapters.
+pub(crate) fn frame_payload_len(header: [u8; 4]) -> Result<usize> {
+    let size = usize::from(u16::from_be_bytes([header[2], header[3]]));
+    if header[0] != 3 || header[1] != 0 || size < 7 {
+        return Err(Error::Protocol("invalid TPKT header"));
+    }
+    Ok(size - 4)
+}
+
+/// Shared bounded TPKT encoding for blocking and async adapters.
+pub(crate) fn frame_bytes(payload: &[u8]) -> Result<Vec<u8>> {
+    if !(3..=65531).contains(&payload.len()) {
+        return Err(Error::InvalidInput("invalid TPKT payload size"));
+    }
+    let mut frame = vec![3, 0];
+    frame.extend_from_slice(&((payload.len() + 4) as u16).to_be_bytes());
+    frame.extend_from_slice(payload);
+    Ok(frame)
 }
 
 #[cfg(test)]
