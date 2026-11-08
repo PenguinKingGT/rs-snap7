@@ -11,6 +11,7 @@ publish = false
 csv = { version = "1.4.0", optional = true }
 roxmltree = { version = "0.21.2", optional = true }
 serde_json = { version = "1.0.154", optional = true }
+serialport = { version = "4.10.1", default-features = false, optional = true }
 tokio = { version = "1", features = ["net", "time", "sync", "rt", "macros", "io-util"], optional = true }
 
 [lints.rust]
@@ -22,3 +23,4 @@ async = ["dep:tokio"]
 tag-import = ["dep:csv", "dep:serde_json", "dep:roxmltree"]
 server = []
 partner = []
+ppi = ["dep:serialport"]

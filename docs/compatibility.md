@@ -183,3 +183,21 @@ The async send/receive adapters run on Tokio's blocking pool. Cancelling their
 future detaches a bounded operation that may still send or consume a transfer.
 They do not promise the native cancellation semantics of AsyncClient. Reconnect
 uses a new Partner session; unknown send outcomes are never silently replayed.
+
+## Experimental S7-200 PPI
+
+The optional ppi module implements single-master/single-slave 8E1 serial with
+serialport (MPL-2.0 library, default libudev dependency disabled). An injected
+Port must honor per-call timeouts; owned OS ports close on drop.
+Frames validate delimiters, repeated lengths, stations, checksum and terminator.
+SD2 request/E5 acknowledgement/SD1 poll/SD2 reply follows the pinned upstream;
+polling toggles the frame-count bit on E5. Corrupt responses can be skipped
+within a bounded scan. Reads/setup may retry the initial request; writes never
+retransmit after possible delivery and report ambiguous outcomes. This is a
+deliberate improvement over upstream's unconditional transport retries.
+
+Negotiation starts at 240 bytes. Oversized transfers are rejected rather than
+implicitly chunked. Counts are bytes for S/SM/I/Q/M/V and 16-bit elements for
+AI/AQ/C/T; timer/counter offsets are item indexes. V maps to wire DB1.
+Multimaster, token passing and PPI-over-TCP remain outside this experimental
+baseline. No physical serial adapter or S7-200 has been validated locally.

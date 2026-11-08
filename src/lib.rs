@@ -52,3 +52,6 @@ pub mod server;
 
 #[cfg(feature = "partner")]
 pub mod partner;
+
+#[cfg(feature = "ppi")]
+pub mod ppi;

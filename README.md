@@ -83,3 +83,5 @@ DB tools provide validated layouts, owned row snapshots, field lookup/export and
 Enable `server` for a bounded S7 emulator with registered/lockable memory, independent sessions, memory/block/clock/control services, configurable SZLs and event callbacks. It simulates protocol behavior; it does not execute PLC programs.
 
 Enable `partner` for active/passive bidirectional PBC transfers with R-IDs, ACK correlation, bounded queues, callbacks and statistics. With `async`, send/receive adapters use Tokio’s blocking pool; cancellation detaches an already started operation.
+
+Enable `ppi` for experimental S7-200 single-master serial access (8E1): checked SD1/SD2/SD3 frames, bounded read retries, S7 negotiation and V/area reads/writes. Serial tests use injected ports and require no hardware.
