@@ -119,7 +119,6 @@ fn passive_accept_timeout_and_tsap_mismatch_are_bounded() {
     assert!(Partner::connect(active).is_err());
     worker.join().unwrap();
 }
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn async_send_receive_use_blocking_pool_and_preserve_rid() {
     let (left, right) = pair();

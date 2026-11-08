@@ -2,7 +2,10 @@
 //!
 //! See docs/testing.md for fixture/environment requirements and report collection.
 
-use rs_snap7::{Client, ClientConfig, Error, Result};
+#![cfg(feature = "blocking")]
+
+use rs_snap7::blocking::Client;
+use rs_snap7::{ClientConfig, Error, Result};
 use std::{
     io::Write,
     time::{Duration, SystemTime, UNIX_EPOCH},

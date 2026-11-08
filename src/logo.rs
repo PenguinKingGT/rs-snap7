@@ -1,4 +1,4 @@
-//! Siemens LOGO! VM addressing over the standard blocking S7 client.
+//! Siemens LOGO! VM addressing over the standard asynchronous S7 client.
 
 use crate::{Address, Client, ClientConfig, Error, Result, WordLen};
 use std::{net::SocketAddr, str::FromStr};
@@ -73,16 +73,16 @@ pub struct Logo {
 
 impl Logo {
     /// Connect using explicit LOGO TSAPs, preserving them during reconnect.
-    pub fn connect(endpoint: SocketAddr, local_tsap: u16, remote_tsap: u16) -> Result<Self> {
+    pub async fn connect(endpoint: SocketAddr, local_tsap: u16, remote_tsap: u16) -> Result<Self> {
         let mut config = ClientConfig::new(endpoint, 0, 0)?;
         config.transport.local_tsap = local_tsap;
         config.transport.remote_tsap = remote_tsap.to_be_bytes().to_vec();
-        Self::connect_with_config(config)
+        Self::connect_with_config(config).await
     }
 
     /// Connect with caller-supplied timeouts, TSAPs, routing, and PDU settings.
-    pub fn connect_with_config(config: ClientConfig) -> Result<Self> {
-        Ok(Self::from_client(Client::connect(config)?))
+    pub async fn connect_with_config(config: ClientConfig) -> Result<Self> {
+        Ok(Self::from_client(Client::connect(config).await?))
     }
     /// Wrap an existing client; its shared session and settings are preserved.
     pub fn from_client(client: Client) -> Self {
@@ -94,46 +94,66 @@ impl Logo {
     }
 
     /// Read a VM value. VW and VD use signed 16-/32-bit values as upstream does.
-    pub fn read(&self, address: &str) -> Result<i64> {
+    pub async fn read(&self, address: &str) -> Result<i64> {
         let address: VmAddress = address.parse()?;
         if let Some(bit) = address.bit {
-            return Ok(i64::from(self.client.db_read_bool(
-                1,
-                address.offset,
-                bit,
-            )?));
+            return Ok(i64::from(
+                self.client.db_read_bool(1, address.offset, bit).await?,
+            ));
         }
         match address.word {
-            WordLen::Byte => Ok(i64::from(self.client.db_read_byte(1, address.offset)?)),
-            WordLen::Word => Ok(i64::from(self.client.db_read_int(1, address.offset)?)),
-            WordLen::DWord => Ok(i64::from(self.client.db_read_dint(1, address.offset)?)),
+            WordLen::Byte => Ok(i64::from(
+                self.client.db_read_byte(1, address.offset).await?,
+            )),
+            WordLen::Word => Ok(i64::from(self.client.db_read_int(1, address.offset).await?)),
+            WordLen::DWord => Ok(i64::from(
+                self.client.db_read_dint(1, address.offset).await?,
+            )),
             _ => Err(Error::InvalidInput("invalid LOGO value width")),
         }
     }
 
     /// Write a VM value after checking its signed/unsigned width. Bit values use
     /// upstream's `value > 0` convention and preserve neighboring flags.
-    pub fn write(&self, address: &str, value: i64) -> Result<()> {
+    pub async fn write(&self, address: &str, value: i64) -> Result<()> {
         let address: VmAddress = address.parse()?;
         if let Some(bit) = address.bit {
-            return self.client.db_write_bool(1, address.offset, bit, value > 0);
+            return self
+                .client
+                .db_write_bool(1, address.offset, bit, value > 0)
+                .await;
         }
         match address.word {
-            WordLen::Byte => self.client.db_write_byte(
-                1,
-                address.offset,
-                u8::try_from(value).map_err(|_| Error::InvalidInput("LOGO byte out of range"))?,
-            ),
-            WordLen::Word => self.client.db_write_int(
-                1,
-                address.offset,
-                i16::try_from(value).map_err(|_| Error::InvalidInput("LOGO word out of range"))?,
-            ),
-            WordLen::DWord => self.client.db_write_dint(
-                1,
-                address.offset,
-                i32::try_from(value).map_err(|_| Error::InvalidInput("LOGO dword out of range"))?,
-            ),
+            WordLen::Byte => {
+                self.client
+                    .db_write_byte(
+                        1,
+                        address.offset,
+                        u8::try_from(value)
+                            .map_err(|_| Error::InvalidInput("LOGO byte out of range"))?,
+                    )
+                    .await
+            }
+            WordLen::Word => {
+                self.client
+                    .db_write_int(
+                        1,
+                        address.offset,
+                        i16::try_from(value)
+                            .map_err(|_| Error::InvalidInput("LOGO word out of range"))?,
+                    )
+                    .await
+            }
+            WordLen::DWord => {
+                self.client
+                    .db_write_dint(
+                        1,
+                        address.offset,
+                        i32::try_from(value)
+                            .map_err(|_| Error::InvalidInput("LOGO dword out of range"))?,
+                    )
+                    .await
+            }
             _ => Err(Error::InvalidInput("invalid LOGO value width")),
         }
     }

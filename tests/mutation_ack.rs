@@ -2,8 +2,10 @@
 
 mod common;
 use common::*;
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
 use rs_snap7::{
-    Client, ClientConfig, Error, Result,
+    ClientConfig, Error, Result,
     codec::datetime::{Date, DateTime},
     protocol::{Pdu, PduType},
 };
@@ -49,6 +51,7 @@ fn clock() -> DateTime {
 }
 impl Mutation {
     /// Execute a blocking operation without exposing the private session helper.
+    #[cfg(feature = "blocking")]
     fn execute(self, client: &Client) -> Result<()> {
         match self {
             Self::Stop => client.plc_stop(),
@@ -62,8 +65,7 @@ impl Mutation {
         }
     }
     /// Execute the equivalent native asynchronous operation.
-    #[cfg(feature = "async")]
-    async fn execute_async(self, client: &rs_snap7::AsyncClient) -> Result<()> {
+    async fn execute_async(self, client: &rs_snap7::Client) -> Result<()> {
         match self {
             Self::Stop => client.plc_stop().await,
             Self::HotStart => client.plc_hot_start().await,
@@ -194,6 +196,7 @@ fn refused(result: Result<()>, mutation: Mutation) {
 
 /// All blocking control/clock/password APIs classify malformed service ACKs.
 #[test]
+#[cfg(feature = "blocking")]
 fn malformed_mutation_acknowledgements_are_uncertain_and_never_replayed() {
     for mutation in MUTATIONS {
         for reply in [Reply::WrongService, Reply::Payload, Reply::Continuation] {
@@ -203,13 +206,12 @@ fn malformed_mutation_acknowledgements_are_uncertain_and_never_replayed() {
             let (config, worker) = peer(mutation, reply);
             let client = Client::connect(config).unwrap();
             uncertain(mutation.execute(&client), mutation);
-            assert!(!client.is_connected());
+            assert!(!client.is_connected().unwrap());
             worker.join().unwrap();
         }
     }
 }
 /// The same distinction holds through native asynchronous session execution.
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn async_malformed_mutation_acknowledgements_are_uncertain() {
     for mutation in MUTATIONS {
@@ -218,7 +220,7 @@ async fn async_malformed_mutation_acknowledgements_are_uncertain() {
                 continue;
             }
             let (config, worker) = peer(mutation, reply);
-            let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+            let client = rs_snap7::Client::connect(config).await.unwrap();
             uncertain(mutation.execute_async(&client).await, mutation);
             assert!(!client.is_connected().await);
             worker.join().unwrap();
@@ -227,23 +229,23 @@ async fn async_malformed_mutation_acknowledgements_are_uncertain() {
 }
 /// Do not turn explicit peer rejection into an ambiguous result.
 #[test]
+#[cfg(feature = "blocking")]
 fn definite_mutation_refusals_preserve_codes_and_connection() {
     for mutation in MUTATIONS {
         let (config, worker) = peer(mutation, Reply::Refusal);
         let client = Client::connect(config).unwrap();
         refused(mutation.execute(&client), mutation);
-        assert!(client.is_connected());
+        assert!(client.is_connected().unwrap());
         client.disconnect().unwrap();
         worker.join().unwrap();
     }
 }
 /// Async refusals preserve the same errors and leave the connection reusable.
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn async_definite_mutation_refusals_preserve_codes() {
     for mutation in MUTATIONS {
         let (config, worker) = peer(mutation, Reply::Refusal);
-        let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+        let client = rs_snap7::Client::connect(config).await.unwrap();
         refused(mutation.execute_async(&client).await, mutation);
         assert!(client.is_connected().await);
         client.disconnect().await.unwrap();
@@ -270,13 +272,14 @@ fn limited_peer() -> (ClientConfig, JoinHandle<()>) {
 
 /// Limiter/manual-close errors occur before sending and remain definite.
 #[test]
+#[cfg(feature = "blocking")]
 fn unsent_mutations_preserve_rate_limit_and_disconnected_errors() {
     let (config, worker) = limited_peer();
     let client = Client::connect(config).unwrap();
     for mutation in MUTATIONS {
         assert!(matches!(mutation.execute(&client), Err(Error::RateLimited)));
     }
-    assert!(client.is_connected());
+    assert!(client.is_connected().unwrap());
     client.disconnect().unwrap();
     worker.join().unwrap();
     for mutation in MUTATIONS {
@@ -288,11 +291,10 @@ fn unsent_mutations_preserve_rate_limit_and_disconnected_errors() {
 }
 
 /// Async pre-send rejection has identical classification and does not close the socket.
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn async_unsent_mutations_preserve_definite_errors() {
     let (config, worker) = limited_peer();
-    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let client = rs_snap7::Client::connect(config).await.unwrap();
     for mutation in MUTATIONS {
         assert!(matches!(
             mutation.execute_async(&client).await,

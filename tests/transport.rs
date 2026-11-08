@@ -1,8 +1,9 @@
 //! Local TCP peers exercise real framing, fragmentation, failure, and deadlines.
+#![cfg(feature = "blocking")]
 
 use rs_snap7::{
     Error,
-    transport::{Connection, TransportConfig},
+    transport::{TransportConfig, blocking::Connection},
 };
 use std::{
     io::{Read, Write},

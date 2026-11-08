@@ -2,7 +2,7 @@
 
 mod transfer;
 
-use super::transport::AsyncConnection;
+use crate::transport::AsyncConnection;
 use crate::{
     ClientConfig, Error, Result,
     protocol::{self, Negotiated, Pdu},

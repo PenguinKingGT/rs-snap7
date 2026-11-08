@@ -2,7 +2,9 @@
 
 mod common;
 use common::*;
-use rs_snap7::{Address, Client, ClientConfig, ClientPool};
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::{Client, ClientPool};
+use rs_snap7::{Address, ClientConfig};
 use std::{
     net::TcpListener,
     sync::{Arc, Condvar, Mutex},
@@ -11,6 +13,7 @@ use std::{
 
 /// Two peers wait for both read requests, proving independent sessions run in parallel.
 #[test]
+#[cfg(feature = "blocking")]
 fn pool_dispatches_concurrently_and_restores_input_order() {
     let barrier = Arc::new((Mutex::new(0), Condvar::new()));
     let mut workers = Vec::new();
@@ -51,10 +54,9 @@ fn pool_dispatches_concurrently_and_restores_input_order() {
 }
 
 /// The native async pool also requires concurrent requests on independent connections.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_pool_dispatches_independent_sessions() {
-    use rs_snap7::{AsyncClient, AsyncClientPool};
+    use rs_snap7::{Client as AsyncClient, ClientPool as AsyncClientPool};
     let barrier = Arc::new((Mutex::new(0), Condvar::new()));
     let mut workers = Vec::new();
     let mut clients = Vec::new();

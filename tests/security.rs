@@ -2,7 +2,9 @@
 
 mod common;
 use common::*;
-use rs_snap7::{Client, ClientConfig, Error, protocol::*};
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
+use rs_snap7::{ClientConfig, Error, protocol::*};
 use std::{net::TcpListener, thread};
 
 /// The SECRET vector is copied from the pinned upstream/native Snap7 corpus.
@@ -57,6 +59,7 @@ fn userdata_identity_lengths_and_error_layers() {
 
 /// The actual client transmits encoded passwords and preserves authentication failures.
 #[test]
+#[cfg(feature = "blocking")]
 fn password_set_clear_and_rejection_over_tcp() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
@@ -95,13 +98,12 @@ fn password_set_clear_and_rejection_over_tcp() {
         client.set_session_password("SECRET"),
         Err(Error::Authentication(0xd602))
     ));
-    assert!(client.is_connected());
+    assert!(client.is_connected().unwrap());
     client.disconnect().unwrap();
     peer.join().unwrap();
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_password_set_clear_and_rejection_over_tcp() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -133,7 +135,7 @@ async fn async_password_set_clear_and_rejection_over_tcp() {
         }
         read_frame(&mut stream);
     });
-    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let client = rs_snap7::Client::connect(config).await.unwrap();
     assert!(client.set_session_password("").await.is_err());
     client.set_session_password("SECRET").await.unwrap();
     client.clear_session_password().await.unwrap();

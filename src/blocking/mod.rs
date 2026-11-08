@@ -7,15 +7,15 @@
 
 pub(crate) mod hooks;
 mod methods;
-mod runtime;
+pub(crate) mod runtime;
 
-use crate::{AsyncClient, ClientConfig, Result};
+use crate::{ClientConfig, Result};
 use std::sync::Arc;
 
 /// Synchronous S7 client; every network operation delegates to the async core.
 #[derive(Debug, Clone)]
 pub struct Client {
-    pub(crate) inner: AsyncClient,
+    pub(crate) inner: crate::Client,
     delivery: Option<Arc<hooks::Delivery>>,
 }
 impl Client {
@@ -31,7 +31,7 @@ impl Client {
         } else {
             None
         };
-        let inner = runtime::run(AsyncClient::connect(config))?;
+        let inner = runtime::run(crate::Client::connect(config))?;
         Ok(Self { inner, delivery })
     }
     /// Inspect local readiness; nested runtime use returns an error rather than panicking.
@@ -52,15 +52,14 @@ impl Client {
 /// Synchronous pool over the same bounded concurrent async read planner.
 #[derive(Debug)]
 pub struct ClientPool {
-    inner: crate::AsyncClientPool,
+    inner: crate::ClientPool,
     _clients: Vec<Client>,
 }
 impl ClientPool {
     /// Require independent sessions; core validation rejects clones of one connection.
     pub fn new(clients: Vec<Client>) -> Result<Self> {
-        let inner = crate::AsyncClientPool::new(
-            clients.iter().map(|client| client.inner.clone()).collect(),
-        )?;
+        let inner =
+            crate::ClientPool::new(clients.iter().map(|client| client.inner.clone()).collect())?;
         Ok(Self {
             inner,
             _clients: clients,
@@ -71,3 +70,6 @@ impl ClientPool {
         runtime::run(self.inner.read_multi_vars(addresses))
     }
 }
+
+mod logo;
+pub use logo::Logo;

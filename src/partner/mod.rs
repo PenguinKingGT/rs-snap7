@@ -7,7 +7,10 @@ pub mod wire;
 use crate::{
     Error, Result,
     protocol::{self, Pdu, PduType},
-    transport::{Connection, TransportConfig, accept_connection},
+    transport::{
+        TransportConfig,
+        blocking::{Connection, accept_connection},
+    },
 };
 use std::{
     net::{SocketAddr, TcpListener},

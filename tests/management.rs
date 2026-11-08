@@ -2,8 +2,10 @@
 
 mod common;
 use common::*;
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
 use rs_snap7::{
-    Client, ClientConfig, Error,
+    ClientConfig, Error,
     codec::datetime::*,
     protocol::{management::*, *},
 };
@@ -75,6 +77,7 @@ fn clock_formats_and_invalid_dates() {
 
 /// Real client entry points emit the right operation and accept no-data clock ACKs.
 #[test]
+#[cfg(feature = "blocking")]
 fn control_and_clock_client_exchanges() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
@@ -128,7 +131,6 @@ fn control_and_clock_client_exchanges() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_control_and_clock_client_exchanges() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -169,7 +171,7 @@ async fn async_control_and_clock_client_exchanges() {
         }
         read_frame(&mut stream);
     });
-    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let client = rs_snap7::Client::connect(config).await.unwrap();
     client.plc_stop().await.unwrap();
     client.plc_hot_start().await.unwrap();
     client.plc_cold_start().await.unwrap();
@@ -184,6 +186,7 @@ async fn async_control_and_clock_client_exchanges() {
 
 /// A missing control acknowledgement is explicitly uncertain and is never replayed.
 #[test]
+#[cfg(feature = "blocking")]
 fn control_ack_loss_is_an_ambiguous_operation() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let mut config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
@@ -204,6 +207,6 @@ fn control_ack_loss_is_an_ambiguous_operation() {
             ..
         })
     ));
-    assert!(!client.is_connected());
+    assert!(!client.is_connected().unwrap());
     worker.join().unwrap();
 }

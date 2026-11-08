@@ -57,24 +57,25 @@ fn server_command_reports_bound_endpoint_and_stops_within_duration() {
     assert!(child.wait().unwrap().success());
 }
 #[cfg(feature = "demo")]
-#[test]
-fn demo_sensor_db_is_read_only_and_control_db_is_writable() {
+#[tokio::test]
+async fn demo_sensor_db_is_read_only_and_control_db_is_writable() {
     let mut demo =
         rs_snap7::demo::Demo::start(ServerConfig::new("127.0.0.1:0".parse().unwrap())).unwrap();
     demo.sample().unwrap();
     let client = rs_snap7::Client::connect(
         rs_snap7::ClientConfig::new(demo.server().local_addr(), 0, 1).unwrap(),
     )
+    .await
     .unwrap();
-    let cpu = client.db_read_real(1, 0).unwrap();
+    let cpu = client.db_read_real(1, 0).await.unwrap();
     assert!(cpu.is_finite() && (0.0..=100.0).contains(&cpu));
-    let memory = client.db_read_real(1, 4).unwrap();
+    let memory = client.db_read_real(1, 4).await.unwrap();
     assert!(memory.is_finite() && (0.0..=100.0).contains(&memory));
     assert!(matches!(
-        client.db_write_byte(1, 0, 1),
+        client.db_write_byte(1, 0, 1).await,
         Err(rs_snap7::Error::Item(3))
     ));
-    client.db_write_int(2, 2, 123).unwrap();
-    assert_eq!(client.db_read_int(2, 2).unwrap(), 123);
-    client.disconnect().unwrap();
+    client.db_write_int(2, 2, 123).await.unwrap();
+    assert_eq!(client.db_read_int(2, 2).await.unwrap(), 123);
+    client.disconnect().await.unwrap();
 }

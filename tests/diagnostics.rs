@@ -2,7 +2,9 @@
 
 mod common;
 use common::*;
-use rs_snap7::{Client, ClientConfig, CpuState, protocol::*, szl::*};
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
+use rs_snap7::{ClientConfig, CpuState, protocol::*, szl::*};
 use std::{net::TcpListener, thread};
 
 /// Record 7 wins over catalog and bootloader version records regardless of order.
@@ -97,6 +99,7 @@ fn information_parsers_validate_sizes_and_state() {
 
 /// Each additional fragment is requested with the prior fragment's data reference.
 #[test]
+#[cfg(feature = "blocking")]
 fn fragmented_szl_and_client_information_methods() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
@@ -204,7 +207,6 @@ fn force_table_layout_and_rejected_records() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_fragmented_szl_and_client_information_methods() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -281,7 +283,7 @@ async fn async_fragmented_szl_and_client_information_methods() {
             }
         }
     });
-    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let client = rs_snap7::Client::connect(config).await.unwrap();
     assert_eq!(client.get_cpu_info().await.unwrap().as_name, "PLC");
     assert_eq!(client.get_cpu_state().await.unwrap(), CpuState::Stop);
     assert_eq!(client.get_cp_info().await.unwrap().max_pdu_length, 480);

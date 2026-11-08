@@ -190,9 +190,22 @@ mod server_scenarios {
     fn blocking_pool_delegates_to_core_and_rejects_shared_sessions() {
         use rs_snap7::{Address, blocking::ClientPool};
         let server = server();
-        let first = Client::connect(ClientConfig::new(server.local_addr(), 0, 1).unwrap()).unwrap();
-        let second =
-            Client::connect(ClientConfig::new(server.local_addr(), 0, 1).unwrap()).unwrap();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let caller = std::thread::current().id();
+        let mut clients = Vec::new();
+        for _ in 0..2 {
+            let sink = calls.clone();
+            let mut config = ClientConfig::new(server.local_addr(), 0, 1).unwrap();
+            config.operation_hook = rs_snap7::observability::OperationHook::new(move |event| {
+                if event.operation == "read_multi_vars" {
+                    assert!(tokio::runtime::Handle::try_current().is_err());
+                    sink.lock().unwrap().push(std::thread::current().id());
+                }
+            });
+            clients.push(Client::connect(config).unwrap());
+        }
+        let second = clients.pop().unwrap();
+        let first = clients.pop().unwrap();
         assert!(ClientPool::new(vec![first.clone(), first.clone()]).is_err());
         let pool = ClientPool::new(vec![first, second]).unwrap();
         let result = pool
@@ -200,5 +213,6 @@ mod server_scenarios {
             .unwrap();
         assert_eq!(result.len(), 2);
         assert!(result.iter().all(Result::is_ok));
+        assert_eq!(*calls.lock().unwrap(), vec![caller; 2]);
     }
 }

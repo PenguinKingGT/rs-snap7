@@ -1,6 +1,6 @@
 //! Bounded native async parallel reads across independent sessions.
 
-use super::AsyncClient;
+use super::Client;
 use crate::{
     Address, Error, Result,
     pool::{assignments, restore},
@@ -10,13 +10,13 @@ use tokio::task::JoinSet;
 
 /// Async read pool with at most 32 independent S7 sessions.
 #[derive(Debug)]
-pub struct AsyncClientPool {
-    clients: Vec<AsyncClient>,
+pub struct ClientPool {
+    clients: Vec<Client>,
 }
 
-impl AsyncClientPool {
+impl ClientPool {
     /// Validate the worker count and reject clones of a single shared connection.
-    pub fn new(clients: Vec<AsyncClient>) -> Result<Self> {
+    pub fn new(clients: Vec<Client>) -> Result<Self> {
         if clients.is_empty() || clients.len() > 32 {
             return Err(Error::InvalidInput("pool requires 1 through 32 sessions"));
         }

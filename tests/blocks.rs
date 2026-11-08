@@ -2,8 +2,10 @@
 
 mod common;
 use common::*;
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
 use rs_snap7::{
-    BlockType, Client, ClientConfig, Error,
+    BlockType, ClientConfig, Error,
     blocks::*,
     protocol::{blocks as wire, *},
 };
@@ -335,6 +337,7 @@ fn server_job(reference: u16, function: u8) -> Pdu {
 
 /// Blocking entry points collect split catalogs and finish all three transfer phases.
 #[test]
+#[cfg(feature = "blocking")]
 fn catalog_upload_download_delete_and_session_reuse() {
     let (options, worker) = peer(serve);
     let client = Client::connect(options).unwrap();
@@ -368,11 +371,10 @@ fn catalog_upload_download_delete_and_session_reuse() {
 }
 
 /// The native async adapter drives the same state machines and public catalog models.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_catalog_and_block_transfers() {
     let (options, worker) = peer(serve);
-    let client = rs_snap7::AsyncClient::connect(options).await.unwrap();
+    let client = rs_snap7::Client::connect(options).await.unwrap();
     assert!(
         client
             .list_blocks_of_type(BlockType::Db, 0)
@@ -411,6 +413,7 @@ async fn async_catalog_and_block_transfers() {
 
 /// Malformed transfer stages close the socket instead of contaminating later operations.
 #[test]
+#[cfg(feature = "blocking")]
 fn malformed_upload_and_early_download_completion_close_session() {
     for download in [false, true] {
         let (options, worker) = peer(move |mut stream| {
@@ -437,13 +440,14 @@ fn malformed_upload_and_early_download_completion_close_session() {
         } else {
             assert!(matches!(client.upload(9), Err(Error::Protocol(_))));
         }
-        assert!(!client.is_connected());
+        assert!(!client.is_connected().unwrap());
         worker.join().unwrap();
     }
 }
 
 /// A lost slice request cannot be treated as a known unapplied download or replayed.
 #[test]
+#[cfg(feature = "blocking")]
 fn interrupted_download_and_initial_refusal_are_distinct() {
     for refused in [false, true] {
         let (mut options, worker) = peer(move |mut stream| {
@@ -468,13 +472,14 @@ fn interrupted_download_and_initial_refusal_are_distinct() {
                 }
             ));
         }
-        assert!(!client.is_connected());
+        assert!(!client.is_connected().unwrap());
         worker.join().unwrap();
     }
 }
 
 /// Silence after the offer is bounded by the original logical operation deadline.
 #[test]
+#[cfg(feature = "blocking")]
 fn stalled_download_times_out_and_closes() {
     let (mut options, worker) = peer(|mut stream| {
         let job = read_pdu(&mut stream);
@@ -487,12 +492,11 @@ fn stalled_download_times_out_and_closes() {
         client.download(&block(), Some(9)),
         Err(Error::AmbiguousOperation { .. })
     ));
-    assert!(!client.is_connected());
+    assert!(!client.is_connected().unwrap());
     worker.join().unwrap();
 }
 
 /// Cancellation while waiting for a reply permit still closes the whole transfer.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn cancelled_download_between_exchanges_closes_socket() {
     use rs_snap7::policy::{RateAlgorithm, RateLimit};
@@ -511,7 +515,7 @@ async fn cancelled_download_between_exchanges_closes_socket() {
         burst: 2,
         ..Default::default()
     };
-    let client = rs_snap7::AsyncClient::connect(options).await.unwrap();
+    let client = rs_snap7::Client::connect(options).await.unwrap();
     let other = client.clone();
     let task = tokio::spawn(async move { other.download(&block(), Some(9)).await });
     tokio::time::timeout(Duration::from_secs(2), waiting)
@@ -546,6 +550,7 @@ fn assert_closed(stream: &mut TcpStream) {
 
 /// A permit rejected before the first file job does not invalidate a healthy session.
 #[test]
+#[cfg(feature = "blocking")]
 fn rejected_catalog_permit_preserves_connection() {
     let (mut options, worker) = peer(|mut stream| {
         assert_eq!(read_frame(&mut stream)[1], 0x80);
@@ -554,13 +559,12 @@ fn rejected_catalog_permit_preserves_connection() {
     options.rate_limit.behavior = rs_snap7::policy::RateBehavior::Reject;
     let client = Client::connect(options).unwrap();
     assert!(matches!(client.list_blocks(), Err(Error::RateLimited)));
-    assert!(client.is_connected());
+    assert!(client.is_connected().unwrap());
     client.disconnect().unwrap();
     worker.join().unwrap();
 }
 
 /// The async transfer guard also preserves unsent requests during limiter rejection.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_rejected_catalog_permit_preserves_connection() {
     let (mut options, worker) = peer(|mut stream| {
@@ -568,7 +572,7 @@ async fn async_rejected_catalog_permit_preserves_connection() {
     });
     options.rate_limit.max_per_second = 0.01;
     options.rate_limit.behavior = rs_snap7::policy::RateBehavior::Reject;
-    let client = rs_snap7::AsyncClient::connect(options).await.unwrap();
+    let client = rs_snap7::Client::connect(options).await.unwrap();
     assert!(matches!(
         client.list_blocks().await,
         Err(Error::RateLimited)

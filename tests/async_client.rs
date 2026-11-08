@@ -1,10 +1,8 @@
 //! Async-only cancellation and concurrent session ownership regressions.
 
-#![cfg(feature = "async")]
-
 mod common;
 use common::*;
-use rs_snap7::{AsyncClient, ClientConfig, Error};
+use rs_snap7::{Client as AsyncClient, ClientConfig, Error};
 use std::{io::Read, net::TcpListener, thread, time::Duration};
 
 /// Cancelling a transmitted job closes its socket instead of leaving a stale reply.

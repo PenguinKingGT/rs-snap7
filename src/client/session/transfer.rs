@@ -1,4 +1,4 @@
-//! Stateful block transfer driver; errors and unwinding invalidate the connection.
+//! Async state-machine driver with whole-transfer cancellation invalidation.
 
 use super::Session;
 use crate::{
@@ -10,37 +10,46 @@ use crate::{
     protocol::{self, Pdu},
 };
 
-/// A failed stateful transfer cannot leave a partially active remote session reusable.
+/// Even cancellation between wire exchanges closes an active upload/download session.
 struct Guard<'a> {
     session: &'a mut Session,
     committed: bool,
     started: bool,
 }
 impl Drop for Guard<'_> {
-    /// Queue loss under the lock; application hooks run later through Client::observe.
+    /// The future borrowing the connection is dropped before this guard runs.
     fn drop(&mut self) {
         if !self.committed && self.started {
-            self.session.lost();
+            self.session.connection = None;
+            if !self.session.loss_notified {
+                self.session
+                    .events
+                    .push(crate::policy::ConnectionEvent::Disconnected);
+                self.session.loss_notified = true;
+            }
         }
     }
 }
 
 impl Session {
-    /// Execute pure state-machine actions under one deadline and exclusive guard.
-    pub(crate) fn transfer<T: Transfer>(&mut self, mut machine: T) -> Result<T::Output> {
+    /// Drive the exact same pure machine as the blocking adapter, without replay.
+    pub(in crate::client) async fn transfer<T: Transfer>(
+        &mut self,
+        mut machine: T,
+    ) -> Result<T::Output> {
         let deadline = self.deadline();
-        self.ensure_ready(deadline)?;
+        self.ensure_ready(deadline).await?;
         let mut guard = Guard {
             session: self,
             committed: false,
             started: false,
         };
-        let result = (|| {
+        let result = async {
             let mut input = None;
             loop {
                 match machine.advance(input.take())? {
                     Action::Exchange(job) => {
-                        let result = guard.session.raw_exchange(job);
+                        let result = guard.session.raw_exchange(job).await;
                         guard.started |= result.is_ok()
                             || result
                                 .as_ref()
@@ -49,7 +58,13 @@ impl Session {
                     }
                     Action::Receive => {
                         guard.started = true;
-                        let bytes = guard.session.connection.receive_until(deadline)?;
+                        let bytes = guard
+                            .session
+                            .connection
+                            .as_mut()
+                            .ok_or(Error::Disconnected)?
+                            .receive(deadline)
+                            .await?;
                         if bytes.len() > usize::from(guard.session.limits.pdu_length) {
                             return Err(Error::Protocol("transfer response exceeds PDU"));
                         }
@@ -64,13 +79,20 @@ impl Session {
                         if bytes.len() > usize::from(guard.session.limits.pdu_length) {
                             return Err(Error::InvalidInput("transfer reply exceeds PDU"));
                         }
-                        guard.session.acquire_permit(deadline)?;
-                        guard.session.connection.send_until(&bytes, deadline)?;
+                        guard.session.acquire_permit(deadline).await?;
+                        guard
+                            .session
+                            .connection
+                            .as_mut()
+                            .ok_or(Error::Disconnected)?
+                            .send(&bytes, deadline)
+                            .await?;
                     }
                     Action::Done => return Ok(()),
                 }
             }
-        })();
+        }
+        .await;
         match result {
             Ok(()) => {
                 guard.committed = true;
@@ -80,12 +102,18 @@ impl Session {
         }
     }
 
-    /// Decode and correlate remote block information for catalog queries and DB sizing.
-    pub(crate) fn block_info(&mut self, kind: BlockType, number: u16) -> Result<BlockInfo> {
-        let payload = self.transfer(Catalog::new(
-            protocol::blocks::info_request(0, kind, number)?,
-            3,
-        ))?;
+    /// Shared metadata interpretation and explicit requested-block correlation.
+    pub(in crate::client) async fn block_info(
+        &mut self,
+        kind: BlockType,
+        number: u16,
+    ) -> Result<BlockInfo> {
+        let payload = self
+            .transfer(Catalog::new(
+                protocol::blocks::info_request(0, kind, number)?,
+                3,
+            ))
+            .await?;
         let info = self.validate(BlockInfo::decode(&payload))?;
         if info.kind != kind || info.number != number {
             return self.validate(Err(Error::Protocol("block-info identity mismatch")));

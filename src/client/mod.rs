@@ -1,15 +1,15 @@
-//! Native asynchronous S7 client, enabled with the `async` Cargo feature.
+//! Native asynchronous S7 client, available with the default feature set.
 //!
 //! Requires a Tokio runtime with I/O and time enabled. Clones serialize complete
 //! operations on one session. Cancelling an in-flight exchange closes its socket.
 
 //!
 //! ```no_run
-//! use rs_snap7::{AsyncClient, ClientConfig};
+//! use rs_snap7::{Client, ClientConfig};
 //! #[tokio::main(flavor = "current_thread")]
 //! async fn main() -> rs_snap7::Result<()> {
 //!     let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
-//!     let client = AsyncClient::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
+//!     let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
 //!     let _value = client.db_read_int(1, 0).await?;
 //!     client.disconnect().await
 //! }
@@ -25,8 +25,7 @@ mod memory;
 mod pool;
 mod security;
 mod session;
-mod transport;
-pub use pool::AsyncClientPool;
+pub use pool::ClientPool;
 mod tags;
 mod typed;
 
@@ -40,14 +39,14 @@ use tokio::sync::{Mutex, MutexGuard};
 
 /// Native async client; clones share one session and independent clients run in parallel.
 #[derive(Debug, Clone)]
-pub struct AsyncClient {
+pub struct Client {
     inner: Arc<Mutex<Session>>,
     config: ClientConfig,
     observer: Arc<crate::observability::Observer>,
     _heartbeat: Option<Arc<heartbeat::HeartbeatHandle>>,
 }
 
-impl AsyncClient {
+impl Client {
     /// Connect and negotiate without using blocking socket calls.
     pub async fn connect(config: ClientConfig) -> Result<Self> {
         config.validate()?;
@@ -117,14 +116,14 @@ impl AsyncClient {
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Snapshot logical operation counts, last timing/error, and callback failures.
     pub fn operation_stats(&self) -> crate::observability::OperationStats {
         self.observer.stats()
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Flush transitions only after the outer future releases its async session guard.
     fn observe<T>(
         &self,

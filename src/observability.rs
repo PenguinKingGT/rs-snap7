@@ -2,7 +2,6 @@
 
 use crate::Error;
 use std::{
-    cell::RefCell,
     fmt,
     net::SocketAddr,
     panic::{AssertUnwindSafe, catch_unwind},
@@ -116,11 +115,6 @@ pub(crate) struct Observer {
     hook_panics: Arc<AtomicU64>,
 }
 
-thread_local! {
-    /// Active observers on this thread, used only for synchronous nesting.
-    static ACTIVE: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
-}
-
 tokio::task_local! {
     /// Scope is restored per future poll, preventing leakage across joined futures.
     static ASYNC_ACTIVE: Vec<usize>;
@@ -135,25 +129,6 @@ impl Observer {
             stats: Mutex::new(OperationStats::default()),
             hook_panics: Arc::new(AtomicU64::new(0)),
         }
-    }
-
-    /// Record only the outermost operation for this observer on the current thread.
-    pub(crate) fn run<T>(
-        &self,
-        name: &'static str,
-        call: impl FnOnce() -> crate::Result<T>,
-    ) -> crate::Result<T> {
-        let id = self as *const Self as usize;
-        if ACTIVE.with(|active| active.borrow().contains(&id)) {
-            return call();
-        }
-        ACTIVE.with(|active| active.borrow_mut().push(id));
-        let scope = ActiveScope;
-        let start = Instant::now();
-        let result = call();
-        drop(scope);
-        self.record(name, start.elapsed(), result.as_ref().err());
-        result
     }
 
     /// Native async nesting uses future-local scopes; cancelled futures have no
@@ -182,11 +157,6 @@ impl Observer {
                 })
                 .await
         }
-    }
-
-    /// Whether this observer is still inside a surrounding synchronous operation.
-    pub(crate) fn active(&self) -> bool {
-        ACTIVE.with(|v| v.borrow().contains(&(self as *const Self as usize)))
     }
 
     /// Whether an outer async operation still owns the current event scope.
@@ -233,17 +203,6 @@ impl Observer {
             }
             invoke();
         }
-    }
-}
-
-/// Restore synchronous nesting state even when user-provided scalar code panics.
-struct ActiveScope;
-impl Drop for ActiveScope {
-    /// Pop only the entry pushed by this logical operation.
-    fn drop(&mut self) {
-        ACTIVE.with(|active| {
-            active.borrow_mut().pop();
-        });
     }
 }
 
@@ -321,19 +280,24 @@ mod tests {
     }
 
     /// A faulty application sink cannot change a PLC result or poison internal locks.
-    #[test]
-    fn callback_panics_do_not_change_operation_results() {
+    #[tokio::test]
+    async fn callback_panics_do_not_change_operation_results() {
         let observer = Observer::new(
             "127.0.0.1:102".parse().unwrap(),
             OperationHook::new(|_| panic!("sink failed")),
         );
-        assert_eq!(observer.run("read", || Ok(42)).unwrap(), 42);
-        let result: crate::Result<()> = observer.run("write", || {
-            Err(Error::PartialWrite {
-                confirmed: 1,
-                source: Box::new(Error::Item(5)),
+        assert_eq!(
+            observer.run_async("read", async { Ok(42) }).await.unwrap(),
+            42
+        );
+        let result: crate::Result<()> = observer
+            .run_async("write", async {
+                Err(Error::PartialWrite {
+                    confirmed: 1,
+                    source: Box::new(Error::Item(5)),
+                })
             })
-        });
+            .await;
         assert!(result.is_err());
         let stats = observer.stats();
         assert_eq!(stats.completed, 2);

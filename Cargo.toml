@@ -23,7 +23,6 @@ missing_docs = "warn"
 unsafe_op_in_unsafe_fn = "deny"
 
 [features]
-async = []
 blocking = ["tokio/rt-multi-thread"]
 tag-import = ["dep:csv", "dep:serde_json", "dep:roxmltree", "dep:serde"]
 server = []

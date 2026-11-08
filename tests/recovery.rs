@@ -2,7 +2,9 @@
 
 mod common;
 use common::*;
-use rs_snap7::{Client, ClientConfig, Error, policy::*, protocol::*};
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
+use rs_snap7::{ClientConfig, Error, policy::*, protocol::*};
 use std::{
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{Arc, Mutex},
@@ -81,6 +83,7 @@ fn config(endpoint: SocketAddr) -> ClientConfig {
 
 /// A read is rebuilt after recovery and re-split to match the smaller negotiated PDU.
 #[test]
+#[cfg(feature = "blocking")]
 fn read_recovery_preserves_data_and_dispatches_unlocked_hooks() {
     let (endpoint, worker) = recovery_peer(false);
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -111,7 +114,6 @@ fn read_recovery_preserves_data_and_dispatches_unlocked_hooks() {
 }
 
 /// Native async read recovery shares the same policies and smaller-PDU behavior.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_read_recovery_and_bounded_future_size() {
     let (endpoint, worker) = recovery_peer(false);
@@ -121,7 +123,7 @@ async fn async_read_recovery_and_bounded_future_size() {
     options.connection_hook = ConnectionHook::new(move |event| {
         sink.lock().unwrap().push(event);
     });
-    let client = rs_snap7::AsyncClient::connect(options).await.unwrap();
+    let client = rs_snap7::Client::connect(options).await.unwrap();
     let operation = client.db_read(1, 0, 300);
     assert!(std::mem::size_of_val(&operation) < 16 * 1024);
     assert_eq!(
@@ -138,12 +140,13 @@ async fn async_read_recovery_and_bounded_future_size() {
 
 /// LOGO recovery retains caller-selected TSAPs rather than replacing them with rack/slot.
 #[test]
+#[cfg(feature = "blocking")]
 fn logo_recovery_preserves_explicit_tsaps() {
     let (endpoint, worker) = recovery_peer(true);
     let mut options = config(endpoint);
     options.transport.local_tsap = 0x1000;
     options.transport.remote_tsap = vec![0x20, 0];
-    let logo = rs_snap7::Logo::connect_with_config(options).unwrap();
+    let logo = rs_snap7::blocking::Logo::connect_with_config(options).unwrap();
     assert_eq!(logo.read("VW0").unwrap(), 0x1234);
     logo.client().disconnect().unwrap();
     worker.join().unwrap();
@@ -151,6 +154,7 @@ fn logo_recovery_preserves_explicit_tsaps() {
 
 /// Automatic recovery never replays a write whose acknowledgement disappeared.
 #[test]
+#[cfg(feature = "blocking")]
 fn uncertain_writes_are_not_replayed_even_with_recovery_enabled() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let options = config(listener.local_addr().unwrap());
@@ -166,12 +170,13 @@ fn uncertain_writes_are_not_replayed_even_with_recovery_enabled() {
         client.db_write(1, 0, &[1]),
         Err(Error::AmbiguousWrite { .. })
     ));
-    assert!(!client.is_connected());
+    assert!(!client.is_connected().unwrap());
     worker.join().unwrap();
 }
 
 /// A peer that refuses reconnection exhausts the finite retry budget.
 #[test]
+#[cfg(feature = "blocking")]
 fn recovery_exhaustion_does_not_leave_a_ready_session() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let options = config(listener.local_addr().unwrap());
@@ -184,7 +189,7 @@ fn recovery_exhaustion_does_not_leave_a_ready_session() {
     });
     let client = Client::connect(options).unwrap();
     assert!(client.db_read(1, 0, 1).is_err());
-    assert!(!client.is_connected());
+    assert!(!client.is_connected().unwrap());
     worker.join().unwrap();
 }
 
@@ -217,6 +222,7 @@ fn serve_heartbeats(mut stream: TcpStream, notify: impl FnOnce()) {
 
 /// Blocking background work uses the normal session guard and stops after explicit close.
 #[test]
+#[cfg(feature = "blocking")]
 fn heartbeat_probes_and_manual_disconnect_are_serialized() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let mut options = config(listener.local_addr().unwrap());
@@ -234,7 +240,6 @@ fn heartbeat_probes_and_manual_disconnect_are_serialized() {
 }
 
 /// Async heartbeat work yields and shares the cancellation-safe socket owner.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_heartbeat_probe_and_shutdown() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -245,7 +250,7 @@ async fn async_heartbeat_probe_and_shutdown() {
         let (stream, _) = listener.accept().unwrap();
         serve_heartbeats(stream, || tx.send(()).unwrap());
     });
-    let client = rs_snap7::AsyncClient::connect(options).await.unwrap();
+    let client = rs_snap7::Client::connect(options).await.unwrap();
     tokio::time::timeout(Duration::from_secs(2), rx)
         .await
         .unwrap()
@@ -257,6 +262,7 @@ async fn async_heartbeat_probe_and_shutdown() {
 
 /// Optimized batch plans are rebuilt when recovery negotiates a smaller reply budget.
 #[test]
+#[cfg(feature = "blocking")]
 fn batch_recovery_replans_merged_variables() {
     let (endpoint, worker) = recovery_peer(false);
     let client = Client::connect(config(endpoint)).unwrap();
@@ -279,13 +285,10 @@ fn batch_recovery_replans_merged_variables() {
 }
 
 /// Async optimized reads use the same smaller-PDU plan invalidation behavior.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_batch_recovery_replans_merged_variables() {
     let (endpoint, worker) = recovery_peer(false);
-    let client = rs_snap7::AsyncClient::connect(config(endpoint))
-        .await
-        .unwrap();
+    let client = rs_snap7::Client::connect(config(endpoint)).await.unwrap();
     let results = client
         .read_multi_vars(&[
             rs_snap7::Address::db(1, 0, 200).unwrap(),
@@ -371,6 +374,7 @@ fn shrinking_read_peer(
 
 /// Both byte and indexed-element reads must rebuild more than the failed old chunk.
 #[test]
+#[cfg(feature = "blocking")]
 fn shrinking_pdu_replans_all_unread_chunks_and_preserves_acknowledged_prefix() {
     for area in [rs_snap7::Area::Db, rs_snap7::Area::Timers] {
         for completed in [0, 1] {
@@ -391,15 +395,12 @@ fn shrinking_pdu_replans_all_unread_chunks_and_preserves_acknowledged_prefix() {
 }
 
 /// Async execution uses the same remaining element count and original deadline.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_shrinking_pdu_replans_all_unread_chunks_and_preserves_prefix() {
     for area in [rs_snap7::Area::Db, rs_snap7::Area::Timers] {
         for completed in [0, 1] {
             let (endpoint, worker) = shrinking_read_peer(area, completed);
-            let client = rs_snap7::AsyncClient::connect(config(endpoint))
-                .await
-                .unwrap();
+            let client = rs_snap7::Client::connect(config(endpoint)).await.unwrap();
             let db = if area == rs_snap7::Area::Db { 1 } else { 0 };
             let width = if area == rs_snap7::Area::Timers { 2 } else { 1 };
             assert_eq!(
@@ -412,4 +413,56 @@ async fn async_shrinking_pdu_replans_all_unread_chunks_and_preserves_prefix() {
             worker.join().unwrap();
         }
     }
+}
+
+/// Native async regression for the corresponding blocking contract.
+#[tokio::test]
+async fn async_logo_recovery_preserves_explicit_tsaps() {
+    let (endpoint, worker) = recovery_peer(true);
+    let mut options = config(endpoint);
+    options.transport.local_tsap = 0x1000;
+    options.transport.remote_tsap = vec![0x20, 0];
+    let logo = rs_snap7::Logo::connect_with_config(options).await.unwrap();
+    assert_eq!(logo.read("VW0").await.unwrap(), 0x1234);
+    logo.client().disconnect().await.unwrap();
+    worker.join().unwrap();
+}
+
+/// Native async regression for the corresponding blocking contract.
+#[tokio::test]
+async fn async_uncertain_writes_are_not_replayed_even_with_recovery_enabled() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let options = config(listener.local_addr().unwrap());
+    let worker = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        negotiate(&mut stream, 480);
+        assert_eq!(read_frame(&mut stream)[13], 5);
+        drop(listener);
+        drop(stream);
+    });
+    let client = rs_snap7::Client::connect(options).await.unwrap();
+    assert!(matches!(
+        client.db_write(1, 0, &[1]).await,
+        Err(Error::AmbiguousWrite { .. })
+    ));
+    assert!(!client.is_connected().await);
+    worker.join().unwrap();
+}
+
+/// Native async regression for the corresponding blocking contract.
+#[tokio::test]
+async fn async_recovery_exhaustion_does_not_leave_a_ready_session() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let options = config(listener.local_addr().unwrap());
+    let worker = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        negotiate(&mut stream, 480);
+        read_frame(&mut stream);
+        drop(listener);
+        drop(stream);
+    });
+    let client = rs_snap7::Client::connect(options).await.unwrap();
+    assert!(client.db_read(1, 0, 1).await.is_err());
+    assert!(!client.is_connected().await);
+    worker.join().unwrap();
 }

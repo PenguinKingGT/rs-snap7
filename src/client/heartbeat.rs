@@ -1,65 +1,42 @@
-//! Opt-in heartbeat worker with weak session ownership and interruptible shutdown.
+//! Opt-in Tokio heartbeat with weak session ownership and cancellation-safe shutdown.
 
 use super::Client;
-use crate::Result;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::Arc;
 
-/// Retained only by client clones; workers retain the stop signal, not this handle.
+/// Aborts background work when the last client clone releases its handle.
 #[derive(Debug)]
-pub(super) struct HeartbeatHandle {
-    stop: Arc<(Mutex<bool>, Condvar)>,
-}
+pub(super) struct HeartbeatHandle(tokio::task::AbortHandle);
 
 impl Drop for HeartbeatHandle {
-    /// Wake an idle worker when the last client clone is dropped.
+    /// Cancellation drops any in-flight socket owned by the background exchange.
     fn drop(&mut self) {
-        let (flag, changed) = &*self.stop;
-        *flag.lock().unwrap_or_else(|p| p.into_inner()) = true;
-        changed.notify_all();
+        self.0.abort();
     }
 }
 
 impl Client {
-    /// Start an optional worker which never reads a socket outside the session guard.
-    pub(super) fn start_heartbeat(&self) -> Result<Option<Arc<HeartbeatHandle>>> {
-        let Some(interval) = self.config.recovery.heartbeat_interval else {
-            return Ok(None);
-        };
-        let stop = Arc::new((Mutex::new(false), Condvar::new()));
-        let handle = Arc::new(HeartbeatHandle {
-            stop: Arc::clone(&stop),
-        });
+    /// Schedule one guarded probe per interval, skipping manually closed sessions.
+    pub(super) fn start_heartbeat(&self) -> Option<Arc<HeartbeatHandle>> {
+        let interval = self.config.recovery.heartbeat_interval?;
         let session = Arc::downgrade(&self.inner);
         let hook = self.config.connection_hook.clone();
-        std::thread::Builder::new()
-            .name("rs-snap7-heartbeat".to_owned())
-            .spawn(move || {
-                loop {
-                    let (flag, changed) = &*stop;
-                    let guard = flag.lock().unwrap_or_else(|p| p.into_inner());
-                    let (guard, _) = changed
-                        .wait_timeout_while(guard, interval, |stopped| !*stopped)
-                        .unwrap_or_else(|p| p.into_inner());
-                    if *guard {
-                        break;
-                    }
-                    drop(guard);
-                    let Some(inner) = session.upgrade() else {
-                        break;
-                    };
-                    let Ok(mut guard) = inner.lock() else {
-                        break;
-                    };
-                    if guard.manually_closed() {
-                        continue;
-                    }
-                    guard.start_operation();
-                    let _ = guard.heartbeat();
-                    let events = guard.take_events();
-                    drop(guard);
-                    hook.emit(events);
+        let task = tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(interval).await;
+                let Some(inner) = session.upgrade() else {
+                    break;
+                };
+                let mut guard = inner.lock().await;
+                if guard.manually_closed() {
+                    continue;
                 }
-            })?;
-        Ok(Some(handle))
+                guard.start_operation();
+                let _ = guard.heartbeat().await;
+                let events = guard.take_events();
+                drop(guard);
+                hook.emit(events);
+            }
+        });
+        Some(Arc::new(HeartbeatHandle(task.abort_handle())))
     }
 }

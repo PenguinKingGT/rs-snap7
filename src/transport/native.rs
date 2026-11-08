@@ -14,7 +14,7 @@ use tokio::{
 
 /// Socket ownership is moved out of the session during every awaited exchange.
 #[derive(Debug)]
-pub(super) struct AsyncConnection {
+pub(crate) struct AsyncConnection {
     stream: TcpStream,
     tpdu_size: usize,
     peer: u16,
@@ -23,7 +23,7 @@ pub(super) struct AsyncConnection {
 
 impl AsyncConnection {
     /// Negotiate COTP over a nonblocking Tokio socket under one deadline.
-    pub(super) async fn connect(config: &TransportConfig, deadline: Instant) -> Result<Self> {
+    pub(crate) async fn connect(config: &TransportConfig, deadline: Instant) -> Result<Self> {
         config.validate()?;
         let stream = timeout_at(deadline, TcpStream::connect(config.endpoint))
             .await
@@ -45,8 +45,13 @@ impl AsyncConnection {
         Ok(connection)
     }
 
+    /// Negotiated maximum COTP frame length.
+    pub(crate) fn tpdu_size(&self) -> usize {
+        self.tpdu_size
+    }
+
     /// Fragment and send a message without blocking executor threads.
-    pub(super) async fn send(&mut self, data: &[u8], deadline: Instant) -> Result<()> {
+    pub(crate) async fn send(&mut self, data: &[u8], deadline: Instant) -> Result<()> {
         if data.len() > self.max_message {
             return Err(Error::InvalidInput("message exceeds transport limit"));
         }
@@ -64,7 +69,7 @@ impl AsyncConnection {
     }
 
     /// Reassemble a bounded COTP message using the caller's original deadline.
-    pub(super) async fn receive(&mut self, deadline: Instant) -> Result<Vec<u8>> {
+    pub(crate) async fn receive(&mut self, deadline: Instant) -> Result<Vec<u8>> {
         let mut result = Vec::new();
         for _ in 0..1024 {
             let frame = self.read_frame(deadline).await?;
@@ -91,7 +96,7 @@ impl AsyncConnection {
     }
 
     /// Send the correct peer reference, then close even on error or cancellation.
-    pub(super) async fn disconnect(mut self, deadline: Instant) -> Result<()> {
+    pub(crate) async fn disconnect(mut self, deadline: Instant) -> Result<()> {
         let peer = self.peer.to_be_bytes();
         self.write_frame(&[6, 0x80, peer[0], peer[1], 0, 1, 0], deadline)
             .await?;
@@ -120,6 +125,66 @@ impl AsyncConnection {
         timeout_at(deadline, self.stream.write_all(&frame))
             .await
             .map_err(|_| Error::Timeout)??;
+        Ok(())
+    }
+}
+
+/// Advanced asynchronous COTP connection without S7 negotiation.
+/// Each operation uses one total deadline; errors and cancellation close the socket.
+#[derive(Debug)]
+pub struct Connection {
+    connection: Option<AsyncConnection>,
+    timeout: std::time::Duration,
+    tpdu_size: usize,
+}
+impl Connection {
+    /// Validate settings and negotiate COTP on the caller's Tokio runtime.
+    pub async fn connect(config: &TransportConfig) -> Result<Self> {
+        config.validate()?;
+        let connection = AsyncConnection::connect(config, Instant::now() + config.timeout).await?;
+        let tpdu_size = connection.tpdu_size();
+        Ok(Self {
+            connection: Some(connection),
+            timeout: config.timeout,
+            tpdu_size,
+        })
+    }
+    /// Inspect local readiness without probing the peer.
+    pub fn is_connected(&self) -> bool {
+        self.connection.is_some()
+    }
+    /// Return the negotiated TPDU size in bytes.
+    pub fn tpdu_size(&self) -> usize {
+        self.tpdu_size
+    }
+    /// Send one bounded message; cancellation invalidates the connection.
+    pub async fn send(&mut self, data: &[u8]) -> Result<()> {
+        let mut connection = self.connection.take().ok_or(Error::Disconnected)?;
+        connection.send(data, Instant::now() + self.timeout).await?;
+        self.connection = Some(connection);
+        Ok(())
+    }
+    /// Receive one reassembled message under a total deadline.
+    pub async fn receive(&mut self) -> Result<Vec<u8>> {
+        let mut connection = self.connection.take().ok_or(Error::Disconnected)?;
+        let reply = connection.receive(Instant::now() + self.timeout).await?;
+        self.connection = Some(connection);
+        Ok(reply)
+    }
+    /// Send and receive under one shared deadline; failures discard the socket.
+    pub async fn exchange(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        let mut connection = self.connection.take().ok_or(Error::Disconnected)?;
+        let deadline = Instant::now() + self.timeout;
+        connection.send(request, deadline).await?;
+        let reply = connection.receive(deadline).await?;
+        self.connection = Some(connection);
+        Ok(reply)
+    }
+    /// Send COTP disconnect and release the socket, including on cancellation.
+    pub async fn disconnect(&mut self) -> Result<()> {
+        if let Some(connection) = self.connection.take() {
+            connection.disconnect(Instant::now() + self.timeout).await?;
+        }
         Ok(())
     }
 }

@@ -51,3 +51,35 @@ pub(crate) fn run<T>(future: impl Future<Output = Result<T>>) -> Result<T> {
     super::hooks::finish(capture);
     result
 }
+
+#[cfg(test)]
+mod tests {
+    //! Runtime ownership remains process-wide under simultaneous callers.
+    use super::*;
+    /// Racing initialization and repeated use always return the same runtime.
+    #[test]
+    fn concurrent_callers_share_one_process_runtime() {
+        let workers: Vec<_> = (0..8)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    let address = runtime().unwrap() as *const Runtime as usize;
+                    assert_eq!(run(async { Ok(42) }).unwrap(), 42);
+                    address
+                })
+            })
+            .collect();
+        let addresses: Vec<_> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
+        assert!(addresses.iter().all(|address| *address == addresses[0]));
+    }
+    /// Entered blocking-pool threads use the same explicit context rejection rule.
+    #[tokio::test]
+    async fn entered_spawn_blocking_context_is_rejected_without_panic() {
+        let result = tokio::task::spawn_blocking(|| run(async { Ok(()) }))
+            .await
+            .unwrap();
+        assert!(matches!(result, Err(Error::BlockingInAsyncContext)));
+    }
+}

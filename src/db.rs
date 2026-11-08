@@ -4,7 +4,7 @@
 //! both editable data and an acknowledged baseline; failed writes remain dirty.
 
 use crate::{
-    Area, Client, Error, Result,
+    Area, Error, Result,
     tags::{DataType, Tag, Value},
 };
 use std::{collections::BTreeMap, ops::Range};
@@ -275,77 +275,6 @@ impl Db {
         }
     }
 
-    /// Refresh an entire row. Pending local changes in that row are discarded.
-    pub fn read_row(&mut self, client: &Client, row: usize) -> Result<()> {
-        let range = self.row_range(row)?;
-        let data = client.read_area(
-            self.config.area,
-            self.config.db_number,
-            self.address(range.start),
-            range.len(),
-        )?;
-        self.data[range.clone()].copy_from_slice(&data);
-        self.baseline[range].copy_from_slice(&data);
-        Ok(())
-    }
-    /// Write the writable row suffix, or only changed byte runs.
-    /// Only acknowledged ranges update the baseline; gaps are never written.
-    pub fn write_row(&mut self, client: &Client, row: usize, changed_only: bool) -> Result<()> {
-        let ranges = if changed_only {
-            self.changed_ranges(row)?
-        } else {
-            let mut range = self.row_range(row)?;
-            range.start += self.config.writable_start;
-            vec![range]
-        };
-        let mut confirmed = 0;
-        for range in ranges {
-            client
-                .write_area(
-                    self.config.area,
-                    self.config.db_number,
-                    self.address(range.start),
-                    &self.data[range.clone()],
-                )
-                .map_err(|error| Self::write_error(error, confirmed))?;
-            confirmed += range.len();
-            self.baseline[range.clone()].copy_from_slice(&self.data[range]);
-        }
-        Ok(())
-    }
-    /// Refresh selected fields. A BOOL read refreshes its entire storage byte.
-    pub fn read_fields(&mut self, client: &Client, row: usize, names: &[&str]) -> Result<()> {
-        let fields = names
-            .iter()
-            .map(|name| self.field(row, name))
-            .collect::<Result<Vec<_>>>()?;
-        for (field, range) in fields {
-            let bytes = client.read_area(
-                self.config.area,
-                self.config.db_number,
-                self.address(range.start),
-                range.len(),
-            )?;
-            field.decode(&bytes)?;
-            self.data[range.clone()].copy_from_slice(&bytes);
-            self.baseline[range].copy_from_slice(&bytes);
-        }
-        Ok(())
-    }
-    /// Write selected fields through checked tags, preserving remote BOOL neighbors.
-    /// Read-only fields are rejected before any request; acknowledged fields become clean.
-    pub fn write_fields(&mut self, client: &Client, row: usize, names: &[&str]) -> Result<()> {
-        let fields = self.write_fields_plan(row, names)?;
-        let mut confirmed = 0;
-        for (tag, range, value) in fields {
-            client
-                .write_tag(&tag, &value)
-                .map_err(|error| Self::write_error(error, confirmed))?;
-            confirmed += range.len();
-            self.acknowledge_field(&tag, range);
-        }
-        Ok(())
-    }
     /// Validate every requested write before touching the network.
     fn write_fields_plan(
         &self,
@@ -389,7 +318,7 @@ impl Db {
 
 impl Db {
     /// Refresh an entire row. Pending local changes in that row are discarded.
-    pub async fn read_row_async(&mut self, client: &crate::AsyncClient, row: usize) -> Result<()> {
+    pub async fn read_row(&mut self, client: &crate::Client, row: usize) -> Result<()> {
         let range = self.row_range(row)?;
         let data = client
             .read_area(
@@ -405,9 +334,9 @@ impl Db {
     }
     /// Write the writable row suffix, or only changed byte runs.
     /// Only acknowledged ranges update the baseline; gaps are never written.
-    pub async fn write_row_async(
+    pub async fn write_row(
         &mut self,
-        client: &crate::AsyncClient,
+        client: &crate::Client,
         row: usize,
         changed_only: bool,
     ) -> Result<()> {
@@ -435,9 +364,9 @@ impl Db {
         Ok(())
     }
     /// Refresh selected fields. A BOOL read refreshes its entire storage byte.
-    pub async fn read_fields_async(
+    pub async fn read_fields(
         &mut self,
-        client: &crate::AsyncClient,
+        client: &crate::Client,
         row: usize,
         names: &[&str],
     ) -> Result<()> {
@@ -462,9 +391,9 @@ impl Db {
     }
     /// Write selected fields through checked tags, preserving remote BOOL neighbors.
     /// Read-only fields are rejected before any request; acknowledged fields become clean.
-    pub async fn write_fields_async(
+    pub async fn write_fields(
         &mut self,
-        client: &crate::AsyncClient,
+        client: &crate::Client,
         row: usize,
         names: &[&str],
     ) -> Result<()> {
@@ -479,5 +408,44 @@ impl Db {
             self.acknowledge_field(&tag, range);
         }
         Ok(())
+    }
+}
+
+#[cfg(feature = "blocking")]
+impl Db {
+    /// Execute `read_row` on the shared blocking runtime, preserving acknowledged progress.
+    pub fn read_row_blocking(
+        &mut self,
+        client: &crate::blocking::Client,
+        row: usize,
+    ) -> Result<()> {
+        crate::blocking::runtime::run(self.read_row(&client.inner, row))
+    }
+    /// Execute `write_row` on the shared blocking runtime, preserving acknowledged progress.
+    pub fn write_row_blocking(
+        &mut self,
+        client: &crate::blocking::Client,
+        row: usize,
+        changed_only: bool,
+    ) -> Result<()> {
+        crate::blocking::runtime::run(self.write_row(&client.inner, row, changed_only))
+    }
+    /// Execute `read_fields` on the shared blocking runtime, preserving acknowledged progress.
+    pub fn read_fields_blocking(
+        &mut self,
+        client: &crate::blocking::Client,
+        row: usize,
+        names: &[&str],
+    ) -> Result<()> {
+        crate::blocking::runtime::run(self.read_fields(&client.inner, row, names))
+    }
+    /// Execute `write_fields` on the shared blocking runtime, preserving acknowledged progress.
+    pub fn write_fields_blocking(
+        &mut self,
+        client: &crate::blocking::Client,
+        row: usize,
+        names: &[&str],
+    ) -> Result<()> {
+        crate::blocking::runtime::run(self.write_fields(&client.inner, row, names))
     }
 }

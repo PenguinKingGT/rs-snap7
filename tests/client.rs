@@ -2,11 +2,14 @@
 
 mod common;
 use common::*;
-use rs_snap7::{Client, ClientConfig, Error, protocol::Pdu};
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
+use rs_snap7::{ClientConfig, Error, protocol::Pdu};
 use std::{net::TcpListener, thread};
 
 /// Negotiation exposes peer limits and clones share disconnect state.
 #[test]
+#[cfg(feature = "blocking")]
 fn lifecycle_raw_exchange_and_shared_disconnect() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
@@ -22,7 +25,7 @@ fn lifecycle_raw_exchange_and_shared_disconnect() {
         assert_eq!(read_frame(&mut stream), [6, 0x80, 0, 7, 0, 1, 0]);
     });
     let client = Client::connect(config).unwrap();
-    assert!(client.is_connected());
+    assert!(client.is_connected().unwrap());
     assert_eq!(client.pdu_length().unwrap(), 240);
     let result = client
         .iso_exchange(&Pdu::job(999, vec![0x42], vec![]).encode().unwrap())
@@ -30,7 +33,7 @@ fn lifecycle_raw_exchange_and_shared_disconnect() {
     assert_eq!(Pdu::decode(&result).unwrap().reference, 2);
     let other = client.clone();
     client.disconnect().unwrap();
-    assert!(!other.is_connected());
+    assert!(!other.is_connected().unwrap());
     assert!(matches!(other.pdu_length(), Err(Error::Disconnected)));
     other.disconnect().unwrap();
     peer.join().unwrap();
@@ -38,6 +41,7 @@ fn lifecycle_raw_exchange_and_shared_disconnect() {
 
 /// Invalid peer limits or unmatched future references cannot publish a session.
 #[test]
+#[cfg(feature = "blocking")]
 fn failed_negotiation_and_lost_reference_are_errors() {
     for pdu in [0, 127, 481] {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -54,6 +58,7 @@ fn failed_negotiation_and_lost_reference_are_errors() {
 
 /// Stale responses are drained rather than causing the request to be resent.
 #[test]
+#[cfg(feature = "blocking")]
 fn stale_replies_are_skipped_without_replaying_request() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let config = ClientConfig::new(listener.local_addr().unwrap(), 0, 1).unwrap();
@@ -80,7 +85,6 @@ fn stale_replies_are_skipped_without_replaying_request() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_lifecycle_raw_exchange_and_shared_disconnect() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -96,7 +100,7 @@ async fn async_lifecycle_raw_exchange_and_shared_disconnect() {
         );
         assert_eq!(read_frame(&mut stream), [6, 0x80, 0, 7, 0, 1, 0]);
     });
-    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let client = rs_snap7::Client::connect(config).await.unwrap();
     assert!(client.is_connected().await);
     assert_eq!(client.pdu_length().await.unwrap(), 240);
     let result = client
@@ -113,7 +117,6 @@ async fn async_lifecycle_raw_exchange_and_shared_disconnect() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_failed_negotiation_and_lost_reference_are_errors() {
     for pdu in [0, 127, 481] {
@@ -123,14 +126,13 @@ async fn async_failed_negotiation_and_lost_reference_are_errors() {
             let (mut stream, _) = listener.accept().unwrap();
             negotiate(&mut stream, pdu);
         });
-        assert!(rs_snap7::AsyncClient::connect(config).await.is_err());
+        assert!(rs_snap7::Client::connect(config).await.is_err());
         peer.join().unwrap();
     }
     assert!(ClientConfig::new("127.0.0.1:102".parse().unwrap(), 8, 0).is_err());
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_stale_replies_are_skipped_without_replaying_request() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -149,7 +151,7 @@ async fn async_stale_replies_are_skipped_without_replaying_request() {
         }
         read_frame(&mut stream);
     });
-    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let client = rs_snap7::Client::connect(config).await.unwrap();
     client
         .iso_exchange(&Pdu::job(0, vec![0x42], vec![]).encode().unwrap())
         .await

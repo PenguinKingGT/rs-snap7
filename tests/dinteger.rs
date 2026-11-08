@@ -2,8 +2,10 @@
 
 mod common;
 use common::*;
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
 use rs_snap7::{
-    Address, Area, Client, ClientConfig, WordLen,
+    Address, Area, ClientConfig, WordLen,
     protocol::{Pdu, PduType},
 };
 use std::{
@@ -39,6 +41,7 @@ fn peer() -> (SocketAddr, JoinHandle<()>) {
 
 /// Blocking clients accept valid DINTEGER data and can issue the next request.
 #[test]
+#[cfg(feature = "blocking")]
 fn blocking_dinteger_responses_preserve_connection() {
     let (endpoint, worker) = peer();
     let client = Client::connect(ClientConfig::new(endpoint, 0, 1).unwrap()).unwrap();
@@ -52,18 +55,17 @@ fn blocking_dinteger_responses_preserve_connection() {
                 .unwrap(),
             (-123456i32).to_be_bytes()
         );
-        assert!(client.is_connected());
+        assert!(client.is_connected().unwrap());
     }
     client.disconnect().unwrap();
     worker.join().unwrap();
 }
 
 /// Native async clients use the same transport-unit handling without disconnection.
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn async_dinteger_responses_preserve_connection() {
     let (endpoint, worker) = peer();
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     let address = Address::new(Area::Db, 1, 4, WordLen::DInt, 1).unwrap();

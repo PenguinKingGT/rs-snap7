@@ -6,7 +6,7 @@ use clap::{Args, Parser, Subcommand};
 use rs_snap7::{Client, ClientConfig, Error, Result, tags::Tag};
 use std::{
     io::{self, Write},
-    net::{Ipv4Addr, SocketAddr, ToSocketAddrs},
+    net::{Ipv4Addr, SocketAddr},
     path::PathBuf,
     sync::{
         Arc,
@@ -43,14 +43,14 @@ struct ConnectionArgs {
 }
 impl ConnectionArgs {
     /// Resolve a chosen host and validate settings before connecting.
-    fn connect(&self) -> Result<Client> {
-        let endpoint = (&*self.host, self.port)
-            .to_socket_addrs()?
+    async fn connect(&self) -> Result<Client> {
+        let endpoint = tokio::net::lookup_host((&*self.host, self.port))
+            .await?
             .next()
             .ok_or(Error::InvalidInput("host resolved to no addresses"))?;
         let mut config = ClientConfig::new(endpoint, self.rack, self.slot)?;
         config.transport.timeout = Duration::from_millis(self.timeout_ms);
-        Client::connect(config)
+        Client::connect(config).await
     }
 }
 /// Supported commands; typed addresses use explicit colon/comma syntax.
@@ -153,13 +153,13 @@ fn run_service(
     Ok(())
 }
 /// Execute one command, validating complete values before PLC connection.
-fn run(cli: Cli) -> Result<()> {
+async fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Read { connection, tag } => {
             let tag: Tag = tag.parse()?;
-            let client = connection.connect()?;
-            println!("{}", value::json(&client.read_tag(&tag)?));
-            client.disconnect()
+            let client = connection.connect().await?;
+            println!("{}", value::json(&client.read_tag(&tag).await?));
+            client.disconnect().await
         }
         Command::Write {
             connection,
@@ -169,9 +169,9 @@ fn run(cli: Cli) -> Result<()> {
             let tag: Tag = tag.parse()?;
             let value = value::parse(&tag, &value)?;
             tag.encode(&value)?;
-            let client = connection.connect()?;
-            client.write_tag(&tag, &value)?;
-            client.disconnect()
+            let client = connection.connect().await?;
+            client.write_tag(&tag, &value).await?;
+            client.disconnect().await
         }
         Command::Dump {
             connection,
@@ -180,11 +180,11 @@ fn run(cli: Cli) -> Result<()> {
             length,
             output,
         } => {
-            let client = connection.connect()?;
+            let client = connection.connect().await?;
             let bytes = match length {
-                Some(length) => client.db_read(db, start, length)?,
+                Some(length) => client.db_read(db, start, length).await?,
                 None => {
-                    let bytes = client.db_get(db, None)?;
+                    let bytes = client.db_get(db, None).await?;
                     bytes
                         .get(start as usize..)
                         .ok_or(Error::InvalidInput("dump start exceeds DB"))?
@@ -202,17 +202,17 @@ fn run(cli: Cli) -> Result<()> {
                     println!();
                 }
             }
-            client.disconnect()
+            client.disconnect().await
         }
         Command::Info { connection } => {
-            let client = connection.connect()?;
-            let state = client.get_cpu_state()?;
-            let cpu = client.get_cpu_info()?;
+            let client = connection.connect().await?;
+            let state = client.get_cpu_state().await?;
+            let cpu = client.get_cpu_info().await?;
             println!(
                 "{}",
-                serde_json::json!({"state":format!("{state:?}"),"module":cpu.module_name,"serial":cpu.serial_number,"pdu_length":client.pdu_length()?})
+                serde_json::json!({"state":format!("{state:?}"),"module":cpu.module_name,"serial":cpu.serial_number,"pdu_length":client.pdu_length().await?})
             );
-            client.disconnect()
+            client.disconnect().await
         }
         Command::Server {
             bind,
@@ -223,15 +223,18 @@ fn run(cli: Cli) -> Result<()> {
             if size == 0 || size > 0x200000 {
                 return Err(Error::InvalidInput("server DB size out of range"));
             }
+            blocking_job(move || {
             let server =
                 rs_snap7::server::Server::start(rs_snap7::server::ServerConfig::new(bind))?;
             server.register_area(rs_snap7::Area::Db, db, vec![0; size])?;
             run_service(server.local_addr(), duration_ms, || Ok(()))
+            }).await
         }
         Command::Discover {
             interface,
             timeout_ms,
         } => {
+            blocking_job(move || {
             let config = rs_snap7::discovery::DiscoveryConfig {
                 timeout: Duration::from_millis(timeout_ms),
                 ..Default::default()
@@ -243,18 +246,31 @@ fn run(cli: Cli) -> Result<()> {
                 );
             }
             Ok(())
+            }).await
         }
         #[cfg(feature = "demo")]
         Command::Demo { bind, duration_ms } => {
+            blocking_job(move || {
             let mut demo = rs_snap7::demo::Demo::start(rs_snap7::server::ServerConfig::new(bind))?;
             run_service(demo.server().local_addr(), duration_ms, || demo.sample())
+            }).await
         }
     }
 }
 /// Report errors to stderr and return nonzero without a panic.
-fn main() {
-    if let Err(error) = run(Cli::parse()) {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+    if let Err(error) = run(Cli::parse()).await {
         eprintln!("{error}");
         std::process::exit(1);
     }
+}
+
+/// Isolate synchronous service loops and discovery from the async executor.
+async fn blocking_job<T: Send + 'static>(
+    job: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    tokio::task::spawn_blocking(job)
+        .await
+        .map_err(|_| Error::Protocol("blocking command worker failed"))?
 }

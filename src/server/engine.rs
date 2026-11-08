@@ -4,7 +4,7 @@ use super::{EventKind, Shared};
 use crate::{
     Address, Area, BlockType, CpuState, Error, Result, WordLen, codec,
     protocol::{self, Pdu, PduType},
-    transport::accept_connection,
+    transport::blocking::accept_connection,
 };
 use std::{
     net::{SocketAddr, TcpStream},

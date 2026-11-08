@@ -1,6 +1,6 @@
-//! Shared memory-operation planning and blocking execution.
+//! Shared memory-operation planning and write outcome classification.
 
-use crate::{Address, Area, Error, Result, WordLen, protocol, session::Session};
+use crate::{Address, Area, Error, Result, WordLen};
 
 /// Split a complete validated range into jobs that fit both PDU and wire fields.
 pub(crate) fn chunks(
@@ -64,101 +64,6 @@ pub(crate) fn chunks(
         done += n;
     }
     Ok(result)
-}
-
-impl Session {
-    /// Execute a prevalidated raw read, keeping one exclusive session for all chunks.
-    pub(crate) fn read_area(
-        &mut self,
-        area: Area,
-        db: u16,
-        start: u32,
-        count: usize,
-    ) -> Result<Vec<u8>> {
-        let deadline = self.deadline();
-        let word = area.word_len();
-        let mut plan = chunks(area, db, start, count, word, self.limits.pdu_length, false)?;
-        let original_pdu = self.limits.pdu_length;
-        self.ensure_ready(deadline)?;
-        if original_pdu != self.limits.pdu_length {
-            plan = chunks(area, db, start, count, word, self.limits.pdu_length, false)?;
-        }
-        let mut pending: std::collections::VecDeque<_> = plan.into();
-        let mut data = Vec::with_capacity(count * word.size());
-        while let Some(address) = pending.pop_front() {
-            let before = self.limits.pdu_length;
-            let response = self.transact_until(
-                |reference| protocol::read_request(reference, &[address]),
-                deadline,
-            );
-            if matches!(response, Err(Error::InvalidInput(_))) && before != self.limits.pdu_length {
-                // Recovery invalidates every queued chunk's old PDU budget.
-                // Keep acknowledged bytes and rebuild the entire unread range in elements.
-                let smaller = chunks(
-                    area,
-                    db,
-                    address.start(),
-                    count - data.len() / word.size(),
-                    word,
-                    self.limits.pdu_length,
-                    false,
-                )?;
-                pending = smaller.into();
-                continue;
-            }
-            let mut outcomes = self.validate(protocol::parse_read(&response?, &[address]))?;
-            data.extend(outcomes.remove(0)?);
-        }
-        Ok(data)
-    }
-
-    /// Execute writes without replaying any mutating exchange on communication loss.
-    pub(crate) fn write_area(
-        &mut self,
-        area: Area,
-        db: u16,
-        start: u32,
-        data: &[u8],
-    ) -> Result<()> {
-        self.ensure_ready(self.deadline())?;
-        let word = area.word_len();
-        if !data.len().is_multiple_of(word.size()) {
-            return Err(Error::InvalidInput("write must contain whole elements"));
-        }
-        let plan = chunks(
-            area,
-            db,
-            start,
-            data.len() / word.size(),
-            word,
-            self.limits.pdu_length,
-            true,
-        )?;
-        let mut confirmed = 0;
-        for address in plan {
-            let size = address.byte_len();
-            let result = self
-                .transact(|reference| {
-                    protocol::write_request(
-                        reference,
-                        &[(address, &data[confirmed..confirmed + size])],
-                    )
-                })
-                .and_then(|response| self.validate(protocol::parse_write(&response, 1)))
-                .and_then(|mut outcomes| outcomes.remove(0));
-            if let Err(source) = result {
-                return Err(write_failure(source, confirmed, size));
-            }
-            confirmed += size;
-        }
-        Ok(())
-    }
-
-    /// Obtain a DB's MC7 size from the upstream 78-byte block-info layout.
-    pub(crate) fn db_size(&mut self, db: u16) -> Result<usize> {
-        let size = usize::from(self.block_info(crate::BlockType::Db, db)?.mc7_size);
-        Ok(if size == 0 { 65536 } else { size })
-    }
 }
 
 /// Preserve definite partial completion and ambiguous, unacknowledged exchanges separately.

@@ -2,7 +2,9 @@
 
 mod common;
 use common::*;
-use rs_snap7::{Client, ClientConfig, Error};
+#[cfg(feature = "blocking")]
+use rs_snap7::blocking::Client;
+use rs_snap7::{ClientConfig, Error};
 use std::{
     net::{SocketAddr, TcpListener},
     sync::{Arc, Mutex},
@@ -129,6 +131,7 @@ impl Peer {
     }
 
     /// Connect a real library client to this independently implemented peer.
+    #[cfg(feature = "blocking")]
     fn client(&self) -> Client {
         Client::connect(ClientConfig::new(self.endpoint, 0, 1).unwrap()).unwrap()
     }
@@ -136,6 +139,7 @@ impl Peer {
 
 /// Multi-PDU transfers, DB metadata discovery, get/fill, and empty operations.
 #[test]
+#[cfg(feature = "blocking")]
 fn chunked_db_read_write_get_and_fill() {
     let peer = Peer::new(None, None);
     let client = peer.client();
@@ -156,6 +160,7 @@ fn chunked_db_read_write_get_and_fill() {
 
 /// Timer/counter offsets count 16-bit elements while normal areas count bytes.
 #[test]
+#[cfg(feature = "blocking")]
 fn area_helpers_and_timer_counter_units() {
     let peer = Peer::new(None, None);
     let client = peer.client();
@@ -179,6 +184,7 @@ fn area_helpers_and_timer_counter_units() {
 
 /// A definite later rejection reports acknowledged progress without claiming uncertainty.
 #[test]
+#[cfg(feature = "blocking")]
 fn partial_write_reports_acknowledged_bytes() {
     let peer = Peer::new(Some(2), None);
     let client = peer.client();
@@ -188,13 +194,14 @@ fn partial_write_reports_acknowledged_bytes() {
         &peer.memory.lock().unwrap()[..101],
         &[vec![7; 100], vec![0]].concat()
     );
-    assert!(client.is_connected());
+    assert!(client.is_connected().unwrap());
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }
 
 /// A lost write acknowledgement is never silently replayed and closes the session.
 #[test]
+#[cfg(feature = "blocking")]
 fn lost_write_ack_reports_uncertain_range() {
     let peer = Peer::new(None, Some(2));
     let client = peer.client();
@@ -207,12 +214,13 @@ fn lost_write_ack_reports_uncertain_range() {
             ..
         }
     ));
-    assert!(!client.is_connected());
+    assert!(!client.is_connected().unwrap());
     peer.worker.join().unwrap();
 }
 
 /// Typed arrays cross wire chunks while preserving signed/float representations.
 #[test]
+#[cfg(feature = "blocking")]
 fn typed_scalars_arrays_and_strings_roundtrip() {
     let peer = Peer::new(None, None);
     let client = peer.client();
@@ -238,6 +246,7 @@ fn typed_scalars_arrays_and_strings_roundtrip() {
 
 /// Concurrent bit updates through clones hold one lock across read/modify/write.
 #[test]
+#[cfg(feature = "blocking")]
 fn concurrent_bit_updates_preserve_other_bits() {
     let peer = Peer::new(None, None);
     let client = peer.client();
@@ -263,6 +272,7 @@ fn concurrent_bit_updates_preserve_other_bits() {
 
 /// Mixed item results, odd padding, large-variable splitting, and original order.
 #[test]
+#[cfg(feature = "blocking")]
 fn batch_reads_and_writes_preserve_item_results() {
     use rs_snap7::Address;
     let peer = Peer::new(None, None);
@@ -292,6 +302,7 @@ fn batch_reads_and_writes_preserve_item_results() {
 
 /// I/O forcing uses process-image read/modify/write and preserves adjacent bits.
 #[test]
+#[cfg(feature = "blocking")]
 fn force_and_cancel_preserve_neighbors() {
     use rs_snap7::Area;
     let peer = Peer::new(None, None);
@@ -309,10 +320,11 @@ fn force_and_cancel_preserve_neighbors() {
 
 /// LOGO VM access reuses the same real S7 session and signed numeric semantics.
 #[test]
+#[cfg(feature = "blocking")]
 fn logo_signed_values_and_preserved_vm_bits() {
     let peer = Peer::new(None, None);
     let client = peer.client();
-    let logo = rs_snap7::Logo::from_client(client.clone());
+    let logo = rs_snap7::blocking::Logo::from_client(client.clone());
     for (address, value) in [("V0", 255), ("VW10", -32768), ("VD20", -2147483648)] {
         logo.write(address, value).unwrap();
         assert_eq!(logo.read(address).unwrap(), value);
@@ -324,17 +336,16 @@ fn logo_signed_values_and_preserved_vm_bits() {
     assert!(logo.write("VW10", 32768).is_err());
     assert!(logo.write("V0", -1).is_err());
     assert!(logo.read("V0junk").is_err());
-    assert!(logo.client().is_connected());
+    assert!(logo.client().is_connected().unwrap());
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_chunked_db_read_write_get_and_fill() {
     let peer = Peer::new(None, None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     let bytes: Vec<u8> = (0..600).map(|i| i as u8).collect();
@@ -353,11 +364,10 @@ async fn async_chunked_db_read_write_get_and_fill() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_area_helpers_and_timer_counter_units() {
     let peer = Peer::new(None, None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     client.ct_write(2, &[1, 2, 3, 4]).await.unwrap();
@@ -379,11 +389,10 @@ async fn async_area_helpers_and_timer_counter_units() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_partial_write_reports_acknowledged_bytes() {
     let peer = Peer::new(Some(2), None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     let error = client.db_write(1, 0, &[7; 300]).await.unwrap_err();
@@ -398,11 +407,10 @@ async fn async_partial_write_reports_acknowledged_bytes() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_lost_write_ack_reports_uncertain_range() {
     let peer = Peer::new(None, Some(2));
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     let error = client.db_write(1, 0, &[7; 300]).await.unwrap_err();
@@ -419,11 +427,10 @@ async fn async_lost_write_ack_reports_uncertain_range() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_typed_scalars_arrays_and_strings_roundtrip() {
     let peer = Peer::new(None, None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     client.db_write_int(1, 0, i16::MIN).await.unwrap();
@@ -450,12 +457,11 @@ async fn async_typed_scalars_arrays_and_strings_roundtrip() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_batch_reads_and_writes_preserve_item_results() {
     use rs_snap7::Address;
     let peer = Peer::new(None, None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     let first = Address::db(1, 10, 301).unwrap();
@@ -486,12 +492,11 @@ async fn async_batch_reads_and_writes_preserve_item_results() {
 }
 
 /// Native async counterpart of the blocking compatibility scenario.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_force_and_cancel_preserve_neighbors() {
     use rs_snap7::Area;
     let peer = Peer::new(None, None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     client.eb_write(0, &[0xaa]).await.unwrap();
@@ -506,11 +511,10 @@ async fn async_force_and_cancel_preserve_neighbors() {
 }
 
 /// Async clones serialize bit updates while yielding during network waits.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_concurrent_bit_updates_preserve_neighbors() {
     let peer = Peer::new(None, None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     let workers: Vec<_> = (0..8)
@@ -529,6 +533,7 @@ async fn async_concurrent_bit_updates_preserve_neighbors() {
 
 /// A merged error is isolated so adjacent valid bytes retain their own outcome.
 #[test]
+#[cfg(feature = "blocking")]
 fn merged_read_errors_fall_back_to_original_items() {
     use rs_snap7::Address;
     let peer = Peer::new(None, None);
@@ -549,12 +554,11 @@ fn merged_read_errors_fall_back_to_original_items() {
 }
 
 /// Async merged reads use the same plan cache and independent-error fallback.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_merged_read_error_fallback() {
     use rs_snap7::Address;
     let peer = Peer::new(None, None);
-    let client = rs_snap7::AsyncClient::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
         .await
         .unwrap();
     client.db_write(1, 1023, &[55]).await.unwrap();
@@ -575,6 +579,7 @@ async fn async_merged_read_error_fallback() {
 
 /// Nested typed/raw calls emit one event, with callbacks outside the session guard.
 #[test]
+#[cfg(feature = "blocking")]
 fn logical_operation_events_are_once_and_reentrant() {
     use rs_snap7::observability::OperationHook;
     let peer = Peer::new(None, None);
@@ -624,7 +629,6 @@ fn logical_operation_events_are_once_and_reentrant() {
 }
 
 /// Future-local nesting does not mix operation events from concurrently joined calls.
-#[cfg(feature = "async")]
 #[tokio::test(flavor = "current_thread")]
 async fn async_logical_events_are_not_duplicated_by_nested_calls() {
     use rs_snap7::observability::OperationHook;
@@ -635,7 +639,7 @@ async fn async_logical_events_are_not_duplicated_by_nested_calls() {
     config.operation_hook = OperationHook::new(move |event| {
         sink.lock().unwrap().push(event);
     });
-    let client = rs_snap7::AsyncClient::connect(config).await.unwrap();
+    let client = rs_snap7::Client::connect(config).await.unwrap();
     let (a, b) = tokio::join!(
         client.db_write_bool(1, 0, 0, true),
         client.db_write_bool(1, 0, 1, true)
@@ -659,6 +663,7 @@ async fn async_logical_events_are_not_duplicated_by_nested_calls() {
 
 /// Tags retain scalar types, batch item outcomes, and neighboring BOOL bits.
 #[test]
+#[cfg(feature = "blocking")]
 fn tag_io_encodes_before_sending_and_preserves_neighbors() {
     use rs_snap7::tags::{DataType, Tag, Value};
     let peer = Peer::new(None, None);
@@ -690,11 +695,10 @@ fn tag_io_encodes_before_sending_and_preserves_neighbors() {
     peer.worker.join().unwrap();
 }
 
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn async_tag_io_matches_blocking_and_rejects_before_network() {
     use rs_snap7::{
-        AsyncClient,
+        Client as AsyncClient,
         tags::{Tag, Value},
     };
     let peer = Peer::new(None, None);
@@ -718,6 +722,7 @@ async fn async_tag_io_matches_blocking_and_rejects_before_network() {
 }
 
 #[test]
+#[cfg(feature = "blocking")]
 fn db_rows_selective_fields_and_dirty_writes_match_remote_memory() {
     use rs_snap7::{
         Area,
@@ -742,23 +747,24 @@ fn db_rows_selective_fields_and_dirty_writes_match_remote_memory() {
     )
     .unwrap();
     db.set(1, "value", &Value::Real(12.5)).unwrap();
-    db.write_row(&client, 1, true).unwrap();
+    db.write_row_blocking(&client, 1, true).unwrap();
     assert!(db.unchanged(1).unwrap());
     assert_eq!(client.db_read_real(1, 114).unwrap(), 12.5);
     client.db_write(1, 102, &[0x80]).unwrap();
     db.set(0, "flag", &Value::Bool(true)).unwrap();
-    db.write_fields(&client, 0, &["flag"]).unwrap();
+    db.write_fields_blocking(&client, 0, &["flag"]).unwrap();
     assert_eq!(client.db_read(1, 102, 1).unwrap(), [0x81]);
-    assert!(db.write_fields(&client, 0, &["id"]).is_err());
-    db.read_fields(&client, 0, &["other"]).unwrap();
+    assert!(db.write_fields_blocking(&client, 0, &["id"]).is_err());
+    db.read_fields_blocking(&client, 0, &["other"]).unwrap();
     assert_eq!(db.get(0, "other").unwrap(), Value::Bool(true));
-    db.read_row(&client, 1).unwrap();
+    db.read_row_blocking(&client, 1).unwrap();
     assert_eq!(db.get(1, "value").unwrap(), Value::Real(12.5));
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }
 
 #[test]
+#[cfg(feature = "blocking")]
 fn db_failed_dirty_write_does_not_acknowledge_local_changes() {
     use rs_snap7::{
         Area,
@@ -782,17 +788,16 @@ fn db_failed_dirty_write_does_not_acknowledge_local_changes() {
     )
     .unwrap();
     db.set(0, "value", &Value::Signed(123)).unwrap();
-    assert!(db.write_row(&client, 0, true).is_err());
+    assert!(db.write_row_blocking(&client, 0, true).is_err());
     assert!(!db.unchanged(0).unwrap());
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }
 
-#[cfg(feature = "async")]
 #[tokio::test]
 async fn async_db_fields_and_rows_use_native_client() {
     use rs_snap7::{
-        Area, AsyncClient,
+        Area, Client as AsyncClient,
         db::{Db, DbConfig, Layout},
         tags::Value,
     };
@@ -815,10 +820,104 @@ async fn async_db_fields_and_rows_use_native_client() {
     )
     .unwrap();
     db.set(0, "value", &Value::Real(3.5)).unwrap();
-    db.write_fields_async(&client, 0, &["value"]).await.unwrap();
-    db.read_row_async(&client, 0).await.unwrap();
+    db.write_fields(&client, 0, &["value"]).await.unwrap();
+    db.read_row(&client, 0).await.unwrap();
     assert!(db.unchanged(0).unwrap());
     assert_eq!(db.get(0, "value").unwrap(), Value::Real(3.5));
     client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Native async regression for the corresponding blocking contract.
+#[tokio::test]
+async fn async_logo_signed_values_and_preserved_vm_bits() {
+    let peer = Peer::new(None, None);
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let logo = rs_snap7::Logo::from_client(client.clone());
+    for (address, value) in [("V0", 255), ("VW10", -32768), ("VD20", -2147483648)] {
+        logo.write(address, value).await.unwrap();
+        assert_eq!(logo.read(address).await.unwrap(), value);
+    }
+    logo.write("V0.3", 0).await.unwrap();
+    assert_eq!(logo.read("V0").await.unwrap(), 247);
+    logo.write("V0.3", 1).await.unwrap();
+    assert_eq!(logo.read("V0.3").await.unwrap(), 1);
+    assert!(logo.write("VW10", 32768).await.is_err());
+    assert!(logo.write("V0", -1).await.is_err());
+    assert!(logo.read("V0junk").await.is_err());
+    assert!(logo.client().is_connected().await);
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// Native async regression for the corresponding blocking contract.
+#[tokio::test]
+async fn async_db_failed_dirty_write_does_not_acknowledge_local_changes() {
+    use rs_snap7::{
+        Area,
+        db::{Db, DbConfig, Layout},
+        tags::Value,
+    };
+    let peer = Peer::new(Some(1), None);
+    let client = rs_snap7::Client::connect(ClientConfig::new(peer.endpoint, 0, 1).unwrap())
+        .await
+        .unwrap();
+    let mut db = Db::new(
+        DbConfig {
+            area: Area::Db,
+            db_number: 1,
+            start: 0,
+            row_size: 2,
+            row_gap: 0,
+            rows: 1,
+            writable_start: 0,
+        },
+        Layout::parse("0 value INT", 0).unwrap(),
+        vec![0; 2],
+    )
+    .unwrap();
+    db.set(0, "value", &Value::Signed(123)).unwrap();
+    assert!(db.write_row(&client, 0, true).await.is_err());
+    assert!(!db.unchanged(0).unwrap());
+    client.disconnect().await.unwrap();
+    peer.worker.join().unwrap();
+}
+
+/// The blocking adapter must update this DB's baseline as each disjoint run succeeds.
+#[cfg(feature = "blocking")]
+#[test]
+fn db_blocking_partial_failure_preserves_acknowledged_dirty_progress() {
+    use rs_snap7::{
+        Area,
+        db::{Db, DbConfig, Layout},
+        tags::Value,
+    };
+    let peer = Peer::new(Some(2), None);
+    let client = peer.client();
+    let mut db = Db::new(
+        DbConfig {
+            area: Area::Db,
+            db_number: 1,
+            start: 0,
+            row_size: 3,
+            row_gap: 0,
+            rows: 1,
+            writable_start: 0,
+        },
+        Layout::parse("0 first BYTE\n2 last BYTE", 0).unwrap(),
+        vec![0; 3],
+    )
+    .unwrap();
+    db.set(0, "first", &Value::Unsigned(1)).unwrap();
+    db.set(0, "last", &Value::Unsigned(2)).unwrap();
+    assert!(matches!(
+        db.write_row_blocking(&client, 0, true),
+        Err(Error::PartialWrite { confirmed: 1, .. })
+    ));
+    assert_eq!(db.changed_ranges(0).unwrap(), vec![2..3]);
+    assert_eq!(&peer.memory.lock().unwrap()[..3], &[1, 0, 0]);
+    client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }

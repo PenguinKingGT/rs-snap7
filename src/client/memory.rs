@@ -1,6 +1,6 @@
 //! Async memory execution over shared chunk and protocol planners.
 
-use super::{AsyncClient, session::Session};
+use super::{Client, session::Session};
 use crate::{
     Area, Error, Result,
     operations::{chunks, write_failure},
@@ -105,7 +105,7 @@ impl Session {
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Read raw elements from an area. Timer/counter offsets and counts use elements;
     /// other areas use bytes. Large transfers are split using negotiated PDU limits.
     pub async fn read_area(
@@ -185,7 +185,7 @@ impl AsyncClient {
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Read outputs; counts use the area's natural element units.
     pub async fn ab_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
         self.observe("ab_read", async {
@@ -202,7 +202,7 @@ impl AsyncClient {
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Read inputs; counts use the area's natural element units.
     pub async fn eb_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
         self.observe("eb_read", async {
@@ -219,7 +219,7 @@ impl AsyncClient {
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Read markers; counts use the area's natural element units.
     pub async fn mb_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
         self.observe("mb_read", async {
@@ -236,7 +236,7 @@ impl AsyncClient {
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Read timer elements; counts use the area's natural element units.
     pub async fn tm_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
         self.observe("tm_read", async {
@@ -253,7 +253,7 @@ impl AsyncClient {
     }
 }
 
-impl AsyncClient {
+impl Client {
     /// Read counter elements; counts use the area's natural element units.
     pub async fn ct_read(&self, start: u32, count: usize) -> Result<Vec<u8>> {
         self.observe("ct_read", async {

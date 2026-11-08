@@ -1,6 +1,7 @@
 //! Read a typed DB value; endpoint and address are supplied by the caller.
 use rs_snap7::{Client, ClientConfig, Result, tags::Tag};
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let mut arguments = std::env::args().skip(1);
     let endpoint = arguments.next().ok_or(rs_snap7::Error::InvalidInput(
         "usage: read_db HOST:PORT TAG",
@@ -12,7 +13,7 @@ fn main() -> Result<()> {
     let endpoint = endpoint
         .parse()
         .map_err(|_| rs_snap7::Error::InvalidInput("invalid socket endpoint"))?;
-    let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?)?;
-    println!("{:?}", client.read_tag(&tag)?);
-    client.disconnect()
+    let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
+    println!("{:?}", client.read_tag(&tag).await?);
+    client.disconnect().await
 }

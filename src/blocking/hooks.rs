@@ -205,4 +205,43 @@ mod tests {
         .unwrap();
         receiver.try_recv().unwrap().invoke();
     }
+    /// A slow background application sink cannot block the reactor/heartbeat worker.
+    #[test]
+    fn slow_background_sink_does_not_stall_async_runtime() {
+        let delivery = Delivery::new().unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        super::super::runtime::run(async move {
+            tokio::spawn(async move {
+                delivery.dispatch(move || {
+                    assert!(tokio::runtime::Handle::try_current().is_err());
+                    started_tx.send(()).unwrap();
+                    release_rx
+                        .recv_timeout(std::time::Duration::from_secs(2))
+                        .unwrap();
+                    done_tx.send(()).unwrap();
+                });
+            })
+            .await
+            .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        started_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+        let started = std::time::Instant::now();
+        let result = super::super::runtime::run(async {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            Ok(42)
+        });
+        let elapsed = started.elapsed();
+        release_tx.send(()).unwrap();
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+        assert_eq!(result.unwrap(), 42);
+        assert!(elapsed < std::time::Duration::from_secs(1));
+    }
 }

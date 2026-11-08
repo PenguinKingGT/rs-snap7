@@ -61,9 +61,9 @@ fn wait(child: &mut Child) -> std::process::ExitStatus {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
-#[test]
+#[tokio::test]
 #[ignore = "requires pinned python-snap7 and Python >=3.10; see docs/testing.md"]
-fn rust_client_interoperates_with_pinned_python_server() {
+async fn rust_client_interoperates_with_pinned_python_server() {
     let child = command("server")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -86,33 +86,38 @@ fn rust_client_interoperates_with_pinned_python_server() {
     let client = Client::connect(
         ClientConfig::new(format!("127.0.0.1:{port}").parse().unwrap(), 0, 1).unwrap(),
     )
+    .await
     .unwrap();
     assert_eq!(
-        client.db_read(1, 0, 300).unwrap(),
+        client.db_read(1, 0, 300).await.unwrap(),
         (0..300).map(|i| i as u8).collect::<Vec<_>>()
     );
-    client.db_write_int(1, 10, -1234).unwrap();
-    assert_eq!(client.db_read_int(1, 10).unwrap(), -1234);
+    client.db_write_int(1, 10, -1234).await.unwrap();
+    assert_eq!(client.db_read_int(1, 10).await.unwrap(), -1234);
     assert_eq!(
-        client.get_block_info(BlockType::Db, 1).unwrap().mc7_size,
+        client
+            .get_block_info(BlockType::Db, 1)
+            .await
+            .unwrap()
+            .mc7_size,
         600
     );
     assert_eq!(
-        client.upload(1).unwrap(),
-        client.db_read(1, 0, 600).unwrap()
+        client.upload(1).await.unwrap(),
+        client.db_read(1, 0, 600).await.unwrap()
     );
     assert_eq!(
-        client.list_block_entries(BlockType::Db).unwrap()[0].number,
+        client.list_block_entries(BlockType::Db).await.unwrap()[0].number,
         1
     );
-    let offline = client.full_upload(BlockType::Db, 1).unwrap();
+    let offline = client.full_upload(BlockType::Db, 1).await.unwrap();
     let mut sample = offline[..128].to_vec();
     rs_snap7::codec::write(&mut sample, 8, 128u32).unwrap();
     rs_snap7::codec::write(&mut sample, 34, 92u16).unwrap();
-    client.download(&sample, Some(1)).unwrap();
+    client.download(&sample, Some(1)).await.unwrap();
     // Python's emulator stores download bytes verbatim, including compact header.
-    assert_eq!(client.db_read(1, 0, 128).unwrap(), sample);
-    client.disconnect().unwrap();
+    assert_eq!(client.db_read(1, 0, 128).await.unwrap(), sample);
+    client.disconnect().await.unwrap();
     guard.0.stdin.take().unwrap().write_all(b"stop\n").unwrap();
     assert!(wait(&mut guard.0).success());
 }

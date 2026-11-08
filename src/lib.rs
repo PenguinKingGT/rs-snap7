@@ -2,15 +2,16 @@
 //!
 //! See `docs/migration.md` for implemented capabilities and compatibility limits.
 
-//! # Blocking access
+//! # Asynchronous access
 //!
 //! ```no_run
 //! use rs_snap7::{Client, ClientConfig};
-//! # fn main() -> rs_snap7::Result<()> {
+//! #[tokio::main(flavor = "current_thread")]
+//! async fn main() -> rs_snap7::Result<()> {
 //! let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
-//! let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?)?;
-//! let _value = client.db_read_int(1, 0)?;
-//! client.disconnect()?;
+//! let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
+//! let _value = client.db_read_int(1, 0).await?;
+//! client.disconnect().await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -28,7 +29,6 @@ mod planner;
 pub mod policy;
 pub mod pool;
 pub mod protocol;
-mod session;
 pub mod szl;
 pub mod tags;
 pub mod transport;
@@ -40,10 +40,6 @@ pub use error::{Error, Result};
 pub use logo::Logo;
 pub use types::{Address, Area, BlockType, CpuState, Parameter, ServerArea, WordLen};
 
-pub mod async_client;
-pub use async_client::AsyncClient;
-
-pub use async_client::AsyncClientPool;
 pub use pool::ClientPool;
 
 #[cfg(feature = "server")]
