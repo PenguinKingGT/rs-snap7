@@ -131,3 +131,35 @@ fn arbitrary_short_input_and_declared_lengths_are_bounded() {
         let _ = Pdu::decode(&bytes);
     }
 }
+
+/// DINTEGER lengths count bytes, including arrays and mixed aligned items.
+#[test]
+fn dinteger_transport_uses_byte_lengths_and_checks_exact_payload_width() {
+    use rs_snap7::{Area, WordLen};
+    let dint = Address::new(Area::Db, 1, 4, WordLen::DInt, 1).unwrap();
+    let value = (-123456i32).to_be_bytes();
+    let mut data = vec![0xff, 6, 0, 4];
+    data.extend(value);
+    let pdu = response(4, 1, data);
+    assert_eq!(parse_read(&pdu, &[dint]).unwrap().remove(0).unwrap(), value);
+    let array = Address::new(Area::Db, 1, 4, WordLen::DInt, 2).unwrap();
+    let byte = Address::db(1, 0, 1).unwrap();
+    let mut mixed = vec![0xff, 4, 0, 8, 42, 0, 0xff, 6, 0, 8];
+    mixed.extend([0, 0, 0, 1, 255, 255, 255, 254]);
+    let items = parse_read(&response(4, 2, mixed), &[byte, array]).unwrap();
+    assert_eq!(items[0].as_ref().unwrap(), &[42]);
+    assert_eq!(
+        items[1].as_ref().unwrap(),
+        &[0, 0, 0, 1, 255, 255, 255, 254]
+    );
+    for (declared, payload) in [
+        (3, vec![0; 3]),
+        (4, vec![0; 3]),
+        (5, vec![0; 5]),
+        (32, vec![0; 4]),
+    ] {
+        let mut data = vec![0xff, 6, 0, declared];
+        data.extend(payload);
+        assert!(parse_read(&response(4, 1, data), &[dint]).is_err());
+    }
+}

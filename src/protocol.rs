@@ -252,7 +252,8 @@ pub fn parse_read(response: &Pdu, addresses: &[Address]) -> Result<Vec<Result<Ve
             0 if code != 0xff && length == 0 => 0,
             3 if address.word_len() == WordLen::Bit => length,
             4 | 5 if length % 8 == 0 => length / 8,
-            7 | 9 => length,
+            // DINTEGER (0x06), REAL and OCTET STRING lengths count bytes.
+            6 | 7 | 9 => length,
             _ => return Err(Error::Protocol("invalid read transport or length units")),
         };
         let payload = response
