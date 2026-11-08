@@ -5,6 +5,7 @@
 pub mod client;
 pub mod codec;
 pub mod error;
+pub mod logo;
 mod operations;
 mod planner;
 pub mod protocol;
@@ -15,4 +16,5 @@ pub mod types;
 
 pub use client::{Client, ClientConfig};
 pub use error::{Error, Result};
+pub use logo::Logo;
 pub use types::{Address, Area, BlockType, CpuState, Parameter, ServerArea, WordLen};

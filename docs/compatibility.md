@@ -56,3 +56,8 @@ and failure behavior. No PLC hardware has been validated yet.
   they do not establish persistent CPU forces. Force-table reads propagate
   communication errors and only treat explicit unsupported-service responses
   as an empty list. Invalid table records are rejected rather than truncated.
+
+- LOGO! VM parsing consumes the entire address instead of accepting regex-prefix
+  matches. VW/VD retain signed values. The adapter preserves explicit TSAPs and
+  delegates lifecycle/operations to its standard client; automatic recovery is
+  still tracked under F11/F23.

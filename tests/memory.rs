@@ -306,3 +306,25 @@ fn force_and_cancel_preserve_neighbors() {
     client.disconnect().unwrap();
     peer.worker.join().unwrap();
 }
+
+/// LOGO VM access reuses the same real S7 session and signed numeric semantics.
+#[test]
+fn logo_signed_values_and_preserved_vm_bits() {
+    let peer = Peer::new(None, None);
+    let client = peer.client();
+    let logo = rs_snap7::Logo::from_client(client.clone());
+    for (address, value) in [("V0", 255), ("VW10", -32768), ("VD20", -2147483648)] {
+        logo.write(address, value).unwrap();
+        assert_eq!(logo.read(address).unwrap(), value);
+    }
+    logo.write("V0.3", 0).unwrap();
+    assert_eq!(logo.read("V0").unwrap(), 247);
+    logo.write("V0.3", 1).unwrap();
+    assert_eq!(logo.read("V0.3").unwrap(), 1);
+    assert!(logo.write("VW10", 32768).is_err());
+    assert!(logo.write("V0", -1).is_err());
+    assert!(logo.read("V0junk").is_err());
+    assert!(logo.client().is_connected());
+    client.disconnect().unwrap();
+    peer.worker.join().unwrap();
+}
