@@ -174,6 +174,10 @@ fn write(shared: &Shared, address: Address, data: &[u8]) -> Result<()> {
         return Err(Error::Item(7));
     }
     let handle = shared.memory(address.area(), address.db_number())?;
+    if handle.1.load(std::sync::atomic::Ordering::Acquire) {
+        return Err(Error::Item(3));
+    }
+
     let mut memory = handle
         .0
         .write()
@@ -364,12 +368,21 @@ impl Engine<'_> {
             if code != Some(BlockType::Db as u8) || number.is_err() {
                 return Ok(refusal(job, 0x8104));
             }
+            let number =
+                u16::try_from(number?).map_err(|_| Error::Protocol("invalid delete number"))?;
+            if self
+                .shared
+                .memory(Area::Db, number)
+                .is_ok_and(|m| m.1.load(std::sync::atomic::Ordering::Acquire))
+            {
+                return Ok(refusal(job, 0xd241));
+            }
             let removed = self
                 .shared
                 .memory
                 .write()
                 .map_err(|_| Error::Protocol("poisoned registry"))?
-                .remove(&(Area::Db as u8, number? as u16));
+                .remove(&(Area::Db as u8, number));
             return Ok(if removed.is_some() {
                 ack(job, vec![0x28], vec![])
             } else {
@@ -744,6 +757,13 @@ impl Engine<'_> {
         }
         let number = u16::try_from(decimal(&p[12..17])?)
             .map_err(|_| Error::Protocol("invalid download DB"))?;
+        if self
+            .shared
+            .memory(Area::Db, number)
+            .is_ok_and(|m| m.1.load(std::sync::atomic::Ordering::Acquire))
+        {
+            return Ok(vec![refusal(job, 0xd241)]);
+        }
         let size = decimal(&p[20..26])?;
         if !(36..=65571).contains(&size) {
             return Ok(vec![refusal(job, 0x8500)]);
@@ -812,7 +832,10 @@ impl Engine<'_> {
                 .map_err(|_| Error::Protocol("poisoned registry"))?;
             registry.insert(
                 (Area::Db as u8, state.number),
-                super::Memory(Arc::new(std::sync::RwLock::new(state.bytes[36..].to_vec()))),
+                super::Memory(
+                    Arc::new(std::sync::RwLock::new(state.bytes[36..].to_vec())),
+                    Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                ),
             );
             return Ok(vec![]);
         }

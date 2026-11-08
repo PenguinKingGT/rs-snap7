@@ -101,8 +101,14 @@ impl ServerConfig {
 
 /// Shared memory handle. Lock scope is explicit and writes reject invalid ranges.
 #[derive(Debug, Clone)]
-pub struct Memory(Arc<RwLock<Vec<u8>>>);
+pub struct Memory(Arc<RwLock<Vec<u8>>>, Arc<AtomicBool>);
 impl Memory {
+    /// Reject remote memory writes while retaining application with_mut access.
+    /// In-flight operations which already checked the flag may complete.
+    pub fn set_read_only(&self, read_only: bool) {
+        self.1.store(read_only, Ordering::Release);
+    }
+
     /// Run an application update while excluding server reads/writes.
     /// Do not call back into this same memory handle while holding the guard.
     pub fn with_mut<T>(&self, update: impl FnOnce(&mut [u8]) -> T) -> Result<T> {
@@ -295,7 +301,10 @@ impl Server {
         if memory.contains_key(&(area as u8, db)) {
             return Err(Error::InvalidInput("area already registered"));
         }
-        let handle = Memory(Arc::new(RwLock::new(bytes)));
+        let handle = Memory(
+            Arc::new(RwLock::new(bytes)),
+            Arc::new(AtomicBool::new(false)),
+        );
         memory.insert((area as u8, db), handle.clone());
         Ok(handle)
     }

@@ -82,3 +82,5 @@ DB 工具支持布局校验、行快照、字段查询/导出与变更字节跟�
 启用 `ppi` 可使用实验性 S7-200 单主串口访问（8E1）：SD1/SD2/SD3 帧校验、有界读取重试、S7 协商以及 V/区域读写。串口测试使用注入端口，无需硬件。
 
 启用 `discovery` 可使用独立 PROFINET DCP 全部发现/定向识别，包含有界收集、去重和设备元数据。内置原始以太网适配器面向 Linux/macOS；其他系统可提供 `FrameIo`。
+
+启用 `cli` 构建 `s7` 命令（read/write/dump/info/server/discover）；配合 `demo` 可将实时主机指标发布到只读 DB1，并提供可写控制区 DB2。参见[使用说明与示例](docs/usage.md)。

@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **26 of 28 migration features are Done.**
+The Rust library scaffold is complete. **27 of 28 migration features are Done.**
 Core clients, codecs, batching/optimization, recovery, limits, events, diagnostics, and management operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -60,7 +60,7 @@ Start here; later groups build on these capabilities.
 | F24 | Active/passive Partner communication: framed transfers, sync/async send/receive, callbacks, status, and statistics | `snap7/partner.py` | Done — [Partner dispatcher](../src/partner/mod.rs), [wire codec](../src/partner/wire.rs), [tests](../tests/partner.rs); async operations use Tokio blocking pool |
 | F25 | Experimental S7-200 PPI: serial frames/checksums, negotiation, retries, area/V-memory reads and writes | `snap7/ppi.py` | Done — [serial client/transport](../src/ppi/mod.rs), [frame codec](../src/ppi/frame.rs), [simulated serial tests](../tests/ppi.rs); physical S7-200 acceptance pending separately |
 | F26 | PROFINET DCP discovery and identification with device metadata | `snap7/discovery.py` | Done — [DCP codecs/collection](../src/discovery/mod.rs), [raw adapter](../src/discovery/raw.rs), [vector/mock tests](../tests/discovery.rs); OS and live-network limits documented |
-| F27 | CLI read/write/dump/info/server/discover commands, host-metrics demo, and runnable usage examples | `snap7/cli.py`, `demo.py`, `example/` | Todo |
+| F27 | CLI read/write/dump/info/server/discover commands, host-metrics demo, and runnable usage examples | `snap7/cli.py`, `demo.py`, `example/` | Done — [CLI](../src/bin/s7.rs), [metrics demo](../src/demo.rs), [examples](../examples/), [process tests](../tests/cli.rs), [usage](usage.md) |
 | F28 | Shared validation suite: wire vectors, Python behavioral compatibility, property/malformed-input tests, concurrency/stress tests, and opt-in hardware acceptance | `tests/test_conformance.py`, `test_behavioral_compatibility.py`, `test_hypothesis.py`, `test_stress.py`, `tests/real_plc/` | In progress — [validation guide](testing.md), default/async local-peer tests and CI configured; Python cross-peer, stress and hardware acceptance pending |
 
 ## Completion Rules & Scope Limits

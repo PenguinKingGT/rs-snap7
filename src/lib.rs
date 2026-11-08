@@ -58,3 +58,6 @@ pub mod ppi;
 
 #[cfg(feature = "discovery")]
 pub mod discovery;
+
+#[cfg(feature = "demo")]
+pub mod demo;

@@ -87,3 +87,5 @@ Enable `partner` for active/passive bidirectional PBC transfers with R-IDs, ACK 
 Enable `ppi` for experimental S7-200 single-master serial access (8E1): checked SD1/SD2/SD3 frames, bounded read retries, S7 negotiation and V/area reads/writes. Serial tests use injected ports and require no hardware.
 
 Enable `discovery` for independent PROFINET DCP Identify-All/directed Identify with bounded collection, deduplication and device metadata. The built-in raw Ethernet adapter targets Linux/macOS; other systems can provide `FrameIo`.
+
+Enable `cli` to build the `s7` binary (read/write/dump/info/server/discover); add `demo` for live host metrics in read-only DB1 and writable controls in DB2. See [usage and examples](docs/usage.md).

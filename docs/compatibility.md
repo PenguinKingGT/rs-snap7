@@ -220,3 +220,20 @@ vectors and a fake adapter. Header/block layouts follow the
 [Scapy protocol definitions](https://github.com/secdev/scapy/blob/master/scapy/contrib/pnio_dcp.py);
 adapter timeout capabilities follow
 [pnet_datalink Config](https://docs.rs/pnet_datalink/0.35.0/pnet_datalink/struct.Config.html).
+
+## CLI and host metrics
+
+The s7 binary uses typed tag addresses rather than duplicating Python's separate
+type/offset flags. Reads/info print JSON; dump prints hex or writes a raw file.
+Values are validated before opening a PLC session. CLI calendar/S5TIME writes
+are explicitly unsupported; the library provides calendar codecs. Services
+support Ctrl-C and an optional duration limit for automation. Raw DCP adapter
+platform/permission limits also apply to discover.
+
+The optional demo uses sysinfo (MIT) to sample CPU, memory, disk and network
+rates at 250 ms intervals; temperatures are optional. Fan readings are zero
+because the adapter does not expose them. Upstream DB1 offsets are preserved;
+byte 37 bit 0 marks temperature availability. DB1 rejects remote memory writes,
+delete and replacement downloads; application sampling retains scoped write
+access. DB2 remains writable. CPU/metrics values reflect the host, not a PLC.
+The stored emulator clock and other server limitations still apply.
