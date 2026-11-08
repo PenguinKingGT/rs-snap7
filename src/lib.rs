@@ -8,6 +8,7 @@ pub mod error;
 pub mod logo;
 mod operations;
 mod planner;
+pub mod policy;
 pub mod protocol;
 mod session;
 pub mod szl;

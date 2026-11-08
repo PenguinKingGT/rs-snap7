@@ -15,6 +15,8 @@ pub(super) struct Session {
     pub(super) limits: Negotiated,
     reference: u16,
     timeout: Duration,
+    limiter: crate::policy::Limiter,
+    origin: Instant,
 }
 
 impl Session {
@@ -31,6 +33,8 @@ impl Session {
             },
             reference: 0,
             timeout: config.transport.timeout,
+            limiter: crate::policy::Limiter::new(config.rate_limit)?,
+            origin: Instant::now(),
         };
         let reply = session
             .transact_until(
@@ -72,12 +76,25 @@ impl Session {
             return Err(Error::Disconnected);
         }
         if Instant::now() >= deadline {
-            return Err(Error::Timeout);
+            return Err(Error::DeadlineBeforeSend);
         }
         let next = self.reference.wrapping_add(1);
         let bytes = build(next)?.encode()?;
         if bytes.len() > usize::from(self.limits.pdu_length) {
             return Err(Error::InvalidInput("request exceeds negotiated PDU"));
+        }
+        loop {
+            if Instant::now() >= deadline {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            let wait = self.limiter.poll(self.origin.elapsed())?;
+            if wait.is_zero() {
+                break;
+            }
+            if wait >= deadline.saturating_duration_since(Instant::now()) {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            tokio::time::sleep(wait).await;
         }
         self.reference = next;
         let mut connection = self.connection.take().ok_or(Error::Disconnected)?;

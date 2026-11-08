@@ -21,6 +21,8 @@ pub struct ClientConfig {
     pub transport: TransportConfig,
     /// Requested S7 PDU bytes; the peer may negotiate a smaller value.
     pub requested_pdu: u16,
+    /// Per-session wire request limiter, including negotiation and continuation jobs.
+    pub rate_limit: crate::policy::RateLimit,
 }
 
 impl ClientConfig {
@@ -36,12 +38,14 @@ impl ClientConfig {
         Ok(Self {
             transport,
             requested_pdu: 480,
+            rate_limit: Default::default(),
         })
     }
 
     /// Validate caller-provided settings before touching the network.
     pub fn validate(&self) -> Result<()> {
         self.transport.validate()?;
+        self.rate_limit.validate()?;
         if self.requested_pdu < 128
             || usize::from(self.requested_pdu) > self.transport.max_message_size
         {

@@ -14,6 +14,8 @@ pub(crate) struct Session {
     pub(crate) limits: Negotiated,
     reference: u16,
     timeout: Duration,
+    limiter: crate::policy::Limiter,
+    origin: Instant,
 }
 
 impl Session {
@@ -29,6 +31,8 @@ impl Session {
             },
             reference: 0,
             timeout: config.transport.timeout,
+            limiter: crate::policy::Limiter::new(config.rate_limit)?,
+            origin: Instant::now(),
         };
         let reply = session
             .transact(|reference| protocol::setup_request(reference, config.requested_pdu))?;
@@ -65,12 +69,25 @@ impl Session {
             return Err(Error::Disconnected);
         }
         if Instant::now() >= deadline {
-            return Err(Error::Timeout);
+            return Err(Error::DeadlineBeforeSend);
         }
         let next = self.reference.wrapping_add(1);
         let request = build(next)?.encode()?;
         if request.len() > usize::from(self.limits.pdu_length) {
             return Err(Error::InvalidInput("request exceeds negotiated PDU"));
+        }
+        loop {
+            if Instant::now() >= deadline {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            let wait = self.limiter.poll(self.origin.elapsed())?;
+            if wait.is_zero() {
+                break;
+            }
+            if wait >= deadline.saturating_duration_since(Instant::now()) {
+                return Err(Error::DeadlineBeforeSend);
+            }
+            std::thread::sleep(wait);
         }
         self.reference = next;
         if let Err(error) = self.connection.send_until(&request, deadline) {

@@ -17,6 +17,8 @@ pub enum Error {
     Io(io::Error),
     /// A bounded operation exhausted its deadline.
     Timeout,
+    /// The operation deadline expired before this request was transmitted.
+    DeadlineBeforeSend,
     /// An operation requires an established session.
     Disconnected,
     /// A PLC rejected an entire request with this two-byte error code.
@@ -69,6 +71,7 @@ impl fmt::Display for Error {
             Self::Protocol(s) => write!(f, "invalid protocol: {s}"),
             Self::Io(e) => write!(f, "I/O: {e}"),
             Self::Timeout => f.write_str("operation timed out"),
+            Self::DeadlineBeforeSend => f.write_str("deadline expired before sending request"),
             Self::Disconnected => f.write_str("not connected"),
             Self::Plc(code) => write!(f, "PLC error 0x{code:04x}"),
             Self::Item(code) => write!(f, "item error 0x{code:02x}: {}", item_error_text(*code)),

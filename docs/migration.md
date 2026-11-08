@@ -8,7 +8,7 @@ relative to `python-snap7/` and require that checkout.
 
 ## Progress
 
-The Rust library scaffold is complete. **14 of 28 migration features are Done.**
+The Rust library scaffold is complete. **15 of 28 migration features are Done.**
 Foundation types, codecs, transport, protocol, client sessions, and raw memory operations are implemented and tested.
 
 Use `Todo`, `In progress`, `Done`, or `Deferred` in the tables below. Update the
@@ -41,7 +41,7 @@ Start here; later groups build on these capabilities.
 | F10 | Read planning: sorting, merging, packetization, result extraction, plan caching, and parallel dispatch | `snap7/optimizer.py`, `client.py` | Todo |
 | F11 | Connection recovery: bounded retries, exponential backoff/jitter, heartbeat, and disconnect/reconnect hooks | `snap7/client.py` | Todo |
 | F12 | Native asynchronous client with supported operation parity, serialized/concurrent request handling, and cleanup | `snap7/async_client.py` | Done — [native async client](../src/async_client/mod.rs), [cancellation tests](../tests/async_client.rs), sync/async parity scenarios in `tests/` |
-| F13 | Request limiting: fixed spacing/token bucket, bursts, blocking/rejection, sync/async integration | `snap7/rate_limiter.py` | Todo |
+| F13 | Request limiting: fixed spacing/token bucket, bursts, blocking/rejection, sync/async integration | `snap7/rate_limiter.py` | Done — [policies](../src/policy.rs), [wire tests](../tests/rate_limit.rs); fake-time algorithm tests colocated with implementation |
 | F14 | Contextual/structured logging, operation timing/hooks, execution time, and last-error reporting | `snap7/log.py`, `client.py`, `client_base.py` | Todo |
 | F15 | CPU/CP/order/protection information, CPU state, SZL lists, fragmented SZL reads, and diagnostic buffer | `snap7/szl.py`, `client.py`, `s7protocol.py` | Done — [SZL models](../src/szl.rs), [diagnostics](../src/client/diagnostics.rs), [tests](../tests/diagnostics.rs) |
 | F16 | PLC stop/hot/cold start, clock read/write, compression, and RAM-to-ROM copy | `snap7/client.py`, `s7protocol.py` | Done — [management](../src/client/management.rs), [wire codecs](../src/protocol/management.rs), [tests](../tests/management.rs) |

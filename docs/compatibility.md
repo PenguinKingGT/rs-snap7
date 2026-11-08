@@ -67,3 +67,9 @@ and failure behavior. No PLC hardware has been validated yet.
   counterparts, sharing codecs and packet planning. Dropping an in-flight
   transaction future closes its socket; cancellation during a write has an
   unknown remote outcome and must not be treated as a confirmed failure.
+
+- Request limits count S7 negotiation, continuation, and application jobs per
+  session; COTP frames are not independently charged. Fixed and token-bucket
+  policies share accounting between runtimes. Token bucket burst defaults to
+  one request unless explicitly configured. A deadline reached while waiting
+  returns `DeadlineBeforeSend`, so an unsent write is not reported as ambiguous.
