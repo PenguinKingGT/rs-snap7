@@ -19,7 +19,8 @@ details or unsupported stubs.
 Start with one library crate, `rs_snap7`. Multiple crates are unnecessary until
 independent consumers or release requirements justify them. Re-export primary
 client, configuration, address, and error types from `lib.rs`; keep wire details
-and execution machinery private by default.
+and execution machinery private by default. The implemented `transport` module
+is an explicit advanced interface for raw ISO-on-TCP consumers and protocol tests.
 
 | Planned module | Responsibility | Migration features |
 | --- | --- | --- |

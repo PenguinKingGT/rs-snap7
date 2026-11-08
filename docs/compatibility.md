@@ -19,3 +19,7 @@ preserve supported representations without duplicating Python-specific layouts.
 
 These differences are intentional; per-feature tests document valid wire values
 and failure behavior. No PLC hardware has been validated yet.
+
+- Transport validates COTP Class 0 headers and negotiation TLVs more strictly
+  than the Python implementation. Fragmentation is bounded by the negotiated
+  TPDU size; malformed frames and timeouts invalidate the connection.
