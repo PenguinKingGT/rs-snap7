@@ -430,6 +430,26 @@ pub(crate) fn accept_connection(
     })
 }
 
+#[cfg(feature = "partner")]
+impl Connection {
+    /// Duplicate the OS socket for one receiver and one serialized sender.
+    /// The Partner dispatcher is the sole reader; shutdown affects both handles.
+    pub(crate) fn reader_clone(&self) -> Result<Self> {
+        Ok(Self {
+            stream: Some(
+                self.stream
+                    .as_ref()
+                    .ok_or(Error::Disconnected)?
+                    .try_clone()?,
+            ),
+            timeout: self.timeout,
+            max_message: self.max_message,
+            tpdu_size: self.tpdu_size,
+            peer_reference: self.peer_reference,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Pure negotiation vectors and malformed TLV coverage.

@@ -81,3 +81,5 @@ Typed tags support PLC4X/nodeS7 parsing, checked values and sync/async I/O. Enab
 DB tools provide validated layouts, owned row snapshots, field lookup/export and dirty-byte tracking. Row/field reads and selective writes support both clients; explicit row gaps and read-only prefixes are preserved.
 
 Enable `server` for a bounded S7 emulator with registered/lockable memory, independent sessions, memory/block/clock/control services, configurable SZLs and event callbacks. It simulates protocol behavior; it does not execute PLC programs.
+
+Enable `partner` for active/passive bidirectional PBC transfers with R-IDs, ACK correlation, bounded queues, callbacks and statistics. With `async`, send/receive adapters use Tokio’s blocking pool; cancellation detaches an already started operation.

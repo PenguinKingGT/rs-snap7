@@ -49,3 +49,6 @@ pub use pool::ClientPool;
 
 #[cfg(feature = "server")]
 pub mod server;
+
+#[cfg(feature = "partner")]
+pub mod partner;

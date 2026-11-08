@@ -166,3 +166,20 @@ locks and hook panics are isolated. Hooks must return promptly and must not wait
 for this server to stop or join its worker. stop/drop closes all registered
 sockets and joins workers. The configured timeout bounds handshake and idle
 sessions. PDU limits and complete write sections are checked before mutation.
+
+## Partner communication
+
+Partner uses the baseline PBC BSEND USERDATA format, including R-ID, exact payload
+length and echoed ACK reference. One reader dispatches both pushes and responses;
+a separately serialized writer permits simultaneous sends. Transfers fit one
+negotiated application PDU (payload <= PDU minus 36); COTP handles transport
+fragmentation. No additional S7-level fragmentation protocol is invented.
+Receive queues are bounded and overflow closes the session. Wire receive timeouts
+terminate idle sessions; receive queue timeouts alone do not. Stats count
+acknowledged sends and incoming transfers. Callbacks omit data, run outside locks,
+and must return promptly without synchronously stopping/waiting on the dispatcher.
+
+The async send/receive adapters run on Tokio's blocking pool. Cancelling their
+future detaches a bounded operation that may still send or consume a transfer.
+They do not promise the native cancellation semantics of AsyncClient. Reconnect
+uses a new Partner session; unknown send outcomes are never silently replayed.
