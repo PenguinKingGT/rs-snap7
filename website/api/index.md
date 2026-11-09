@@ -59,3 +59,20 @@ API reference; this site provides task-oriented guides and a module map.
 See the [client source](https://github.com/PenguinKingGT/rs-snap7/blob/main/src/client/mod.rs),
 [blocking facade](https://github.com/PenguinKingGT/rs-snap7/blob/main/src/blocking/mod.rs), and
 [optional feature list](../guide/optional-products.md) for module-level entry points.
+
+## Browse by Module
+
+- [Client](client.md)
+- [Server](server.md)
+- [Partner](partner.md)
+- [LOGO!](logo.md)
+- [PPI](ppi.md)
+- [Value Codecs](codec.md)
+- [Tags](tags.md)
+- [DB Snapshots](db.md)
+- [Pools, Policies and Events](optimization.md)
+- [Diagnostics and Blocks](diagnostics.md)
+- [Discovery](discovery.md)
+- [Types and Addresses](types.md)
+- [Errors](errors.md)
+- [Demo](demo.md)

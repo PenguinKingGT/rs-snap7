@@ -32,3 +32,5 @@ rs-snap7 是 python-snap7 的 Rust 迁移项目，28 项基线迁移功能均已
 可以先使用[本地仿真器](guide/getting-started.md)体验，了解
 [异步与同步接口](guide/async-and-blocking.md)，并在接入硬件前阅读
 [支持范围与限制](guide/errors-and-limits.md)。
+
+接入控制器请阅读 [PLC 连接](guide/plc-connections.md)，无硬件开发可使用[仿真服务器](guide/server.md)，遇到问题参见[连接排查](guide/troubleshooting.md)。

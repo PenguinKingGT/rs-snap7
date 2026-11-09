@@ -57,3 +57,20 @@ cargo doc --no-deps --all-features --open
 
 完整入口见[客户端源码](https://github.com/PenguinKingGT/rs-snap7/blob/main/src/client/mod.rs)、
 [同步封装](https://github.com/PenguinKingGT/rs-snap7/blob/main/src/blocking/mod.rs)与[可选特性](../guide/optional-products.md)。
+
+## 按模块查阅
+
+- [客户端](client.md)
+- [仿真器](server.md)
+- [Partner](partner.md)
+- [LOGO!](logo.md)
+- [PPI](ppi.md)
+- [数值编解码](codec.md)
+- [标签](tags.md)
+- [DB 快照](db.md)
+- [连接池、策略与事件](optimization.md)
+- [诊断与块模型](diagnostics.md)
+- [设备发现](discovery.md)
+- [类型与地址](types.md)
+- [错误](errors.md)
+- [主机指标 Demo](demo.md)

@@ -82,3 +82,12 @@ for hosting configuration.
 - Comments and configuration explanations stay in English.
 - Broken internal links fail production builds; do not disable that check.
 - Commit package-lock.json and use `npm ci` for reproducible installs.
+
+## Documentation Reference
+
+The tutorial and API organization follows the task-oriented structure of
+[python-snap7 documentation](https://python-snap7.readthedocs.io/en/latest/).
+Examples and API entry points describe the current Rust implementation. Upstream
+hardware results and Python-only behavior are not Rust acceptance claims.
+Each tutorial/API page has a matching Chinese path. Categorized references link
+to generated Rustdoc; browser checks verify page parity and those API targets.

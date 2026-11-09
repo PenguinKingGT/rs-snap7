@@ -1,26 +1,22 @@
 // Check navigation, locale-specific search, generated API access, and mobile reading.
 import { expect, test } from '@playwright/test';
+import { readdirSync } from 'node:fs';
 
 const base = process.env.DOCS_BASE || '/';
-const guides = [
-    'getting-started',
-    'configuration',
-    'async-and-blocking',
-    'read-write',
-    'data-tools',
-    'diagnostics',
-    'optional-products',
-    'errors-and-limits',
-];
+// Discover published Markdown pages so new tutorial/API categories cannot skip checks.
+const sections = ['guide', 'api'];
+const pages = sections.flatMap((section) => readdirSync(new URL(`../${section}/`, import.meta.url))
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => `${section}/${file.replace(/\.md$/, '.html')}`));
 
 test('language switch retains the current tutorial and localizes navigation', async ({ page }) => {
     await page.goto('guide/getting-started.html');
-    await expect(page.getByRole('heading', { name: /^Getting Started/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /^Getting Started/ })).toBeVisible();
     await page.getByRole('button', { name: 'Change language' }).click();
     await page.locator('.VPNavBarTranslations').getByRole('link', { name: '简体中文' }).click();
     await expect(page).toHaveURL(new URL(`${base}zh/guide/getting-started.html`, page.url()).href);
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
-    await expect(page.getByRole('heading', { name: /^快速开始/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /^快速开始/ })).toBeVisible();
     await expect(page.locator('.VPSidebar').getByRole('link', { name: '读取与写入' })).toBeVisible();
     await page.getByRole('button', { name: '切换语言' }).click();
     await page.locator('.VPNavBarTranslations').getByRole('link', { name: 'English' }).click();
@@ -31,7 +27,7 @@ for (const locale of ['', 'zh/']) {
     test(`all ${locale ? 'Chinese' : 'English'} tutorials and API overview render`, async ({ page }) => {
         const errors: string[] = [];
         page.on('pageerror', (error) => errors.push(error.message));
-        for (const route of ['index.html', ...guides.map((guide) => `guide/${guide}.html`), 'api/index.html']) {
+        for (const route of ['index.html', ...pages]) {
             const response = await page.goto(`${locale}${route}`);
             expect(response?.status()).toBe(200);
             await expect(page.locator('h1').first()).toBeVisible();
@@ -83,6 +79,31 @@ test('mobile navigation opens and long code blocks do not widen the viewport', a
     await page.getByRole('button', { name: '菜单', exact: true }).click();
     await expect(page.locator('.VPSidebar').getByRole('link', { name: '标签与 DB 快照' })).toBeVisible();
     await page.locator('.VPSidebar').getByRole('link', { name: '标签与 DB 快照' }).click();
-    await expect(page.getByRole('heading', { name: /^标签与 DB 快照/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /^标签与 DB 快照/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+
+test('new tutorial and API categories exist in both languages', async () => {
+    for (const section of sections) {
+        const english = readdirSync(new URL(`../${section}/`, import.meta.url)).filter((file) => file.endsWith('.md')).sort();
+        const chinese = readdirSync(new URL(`../zh/${section}/`, import.meta.url)).filter((file) => file.endsWith('.md')).sort();
+        expect(chinese).toEqual(english);
+    }
+});
+
+test('categorized API links resolve to generated documentation', async ({ page, request }) => {
+    const targets = new Set<string>();
+    for (const route of pages.filter((route) => route.startsWith('api/'))) {
+        await page.goto(route);
+        const links = await page.locator('.vp-doc a[href*="/rustdoc/"]').evaluateAll((anchors) =>
+            anchors.map((anchor) => (anchor as HTMLAnchorElement).href));
+        expect(links.length).toBeGreaterThan(0);
+        for (const link of links) targets.add(link);
+    }
+    for (const target of targets) {
+        const response = await request.get(target);
+        expect(response.status(), target).toBe(200);
+        expect(await response.text(), target).toContain('rustdoc');
+    }
 });

@@ -61,3 +61,5 @@ clients or a `ClientPool` when reading multiple connections concurrently.
 - [Usage and examples](optional-products.md): features, CLI, tags, and optional products.
 - [API reference](../api/index.md): public types and local Rustdoc generation.
 - [Compatibility and limits](errors-and-limits.md): supported PLC behavior and cancellation rules.
+
+Before using hardware, follow [PLC connections](plc-connections.md) and [TIA Portal setup](tia-portal.md).

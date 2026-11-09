@@ -3,6 +3,22 @@
 Examples below assume an already connected async `client` and an application
 function returning `rs_snap7::Result<()>`.
 
+
+## Address Mapping and Value Types
+
+| PLC address / type | Rust access | Unit |
+| --- | --- | --- |
+| `DB1.DBX0.3` / BOOL | `db_read_bool(1, 0, 3)` | Byte offset 0, bit 3 |
+| `DB1.DBW2` / INT | `db_read_int(1, 2)` → `i16` | Two bytes |
+| `DB1.DBD4` / REAL | `db_read_real(1, 4)` → `f32` | Four bytes |
+| `MB8` / BYTE | `mb_read(8, 1)` | One marker byte |
+| WORD / DWORD | `u16` / `u32` | Unsigned 16 / 32 bits |
+| LREAL | `f64` | Eight bytes |
+
+DBW/DBD specify storage width; the declared PLC type determines interpretation.
+A DBD offset can contain DINT or REAL: select the matching typed method.
+STRING and WSTRING include length headers rather than only character bytes.
+
 ## Raw DB bytes
 
 ```rust

@@ -32,3 +32,5 @@ Real PLC, serial PPI, and live DCP acceptance remain pending.
 Start with the [local emulator](guide/getting-started.md), choose
 [async or blocking access](guide/async-and-blocking.md), and review the
 [scope and limits](guide/errors-and-limits.md) before hardware integration.
+
+For hardware, start with [PLC connections](guide/plc-connections.md). For local development, use the [server tutorial](guide/server.md); diagnose failures with [troubleshooting](guide/troubleshooting.md).

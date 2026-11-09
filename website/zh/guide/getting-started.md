@@ -59,3 +59,5 @@ async fn main() -> Result<()> {
 - [使用与示例](optional-products.md)：特性、命令行、标签与可选产品。
 - [API 参考](../api/index.md)：公开类型和本地 Rustdoc。
 - [兼容性与限制](errors-and-limits.md)：PLC 行为与取消规则。
+
+连接真实控制器前，请先阅读 [PLC 连接](plc-connections.md)和 [TIA Portal 配置](tia-portal.md)。

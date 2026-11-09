@@ -2,6 +2,22 @@
 
 以下示例假设已有异步 `client`，应用函数返回 `rs_snap7::Result<()>`。
 
+
+## 地址映射与数值类型
+
+| PLC 地址 / 类型 | Rust 访问方式 | 单位 |
+| --- | --- | --- |
+| `DB1.DBX0.3` / BOOL | `db_read_bool(1, 0, 3)` | 字节偏移 0、位号 3 |
+| `DB1.DBW2` / INT | `db_read_int(1, 2)` → `i16` | 两字节 |
+| `DB1.DBD4` / REAL | `db_read_real(1, 4)` → `f32` | 四字节 |
+| `MB8` / BYTE | `mb_read(8, 1)` | 标记区一个字节 |
+| WORD / DWORD | `u16` / `u32` | 无符号 16 / 32 位 |
+| LREAL | `f64` | 八字节 |
+
+地址中的 DBW/DBD 描述存储宽度，数值解释取决于声明类型。
+例如同一 DBD 偏移可按 DINT 或 REAL 解码，应用必须选择与 PLC 定义一致的方法。
+STRING 与 WSTRING 还包含长度头，不能当作裸字符切片使用。
+
 ## 原始 DB 字节
 
 ```rust

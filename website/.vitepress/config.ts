@@ -19,15 +19,30 @@ function navigation(chinese: boolean) {
         ],
         sidebar: [
             {
-                text: chinese ? '使用指南' : 'User Guide',
+                text: chinese ? '入门' : 'Getting Started',
                 items: [
                     { text: chinese ? '快速开始' : 'Getting Started', link: link('guide/getting-started') },
+                    { text: chinese ? 'PLC 连接' : 'PLC Connections', link: link('guide/plc-connections') },
+                    { text: chinese ? 'TIA Portal 配置' : 'TIA Portal Setup', link: link('guide/tia-portal') },
+                ],
+            },
+            {
+                text: chinese ? '使用指南' : 'User Guide',
+                items: [
                     { text: chinese ? '连接与配置' : 'Connection and Configuration', link: link('guide/configuration') },
                     { text: chinese ? '异步与同步' : 'Async and Blocking', link: link('guide/async-and-blocking') },
                     { text: chinese ? '读取与写入' : 'Reading and Writing', link: link('guide/read-write') },
+                    { text: chinese ? '多变量读取与连接池' : 'Multi-variable Reads and Pools', link: link('guide/multi-variable') },
                     { text: chinese ? '标签与 DB 快照' : 'Tags and DB Snapshots', link: link('guide/data-tools') },
                     { text: chinese ? '诊断与块操作' : 'Diagnostics and Blocks', link: link('guide/diagnostics') },
+                    { text: chinese ? '仿真服务器' : 'Server Setup for Testing', link: link('guide/server') },
                     { text: chinese ? '可选功能与 CLI' : 'Optional Features and CLI', link: link('guide/optional-products') },
+                ],
+            },
+            {
+                text: chinese ? '故障排查' : 'Troubleshooting',
+                items: [
+                    { text: chinese ? '连接故障排查' : 'Connection Troubleshooting', link: link('guide/troubleshooting') },
                     { text: chinese ? '错误处理与限制' : 'Errors and Limits', link: link('guide/errors-and-limits') },
                 ],
             },
@@ -35,7 +50,26 @@ function navigation(chinese: boolean) {
                 text: chinese ? 'API 参考' : 'API Reference',
                 items: [
                     { text: chinese ? '接口索引' : 'API Overview', link: link('api/') },
-                    { text: chinese ? '完整 Rust API（英文）' : 'Complete Rust API', link: '/rustdoc/rs_snap7/index.html', target: '_blank' },
+                    { text: chinese ? '客户端' : 'Client', link: link('api/client') },
+                    { text: chinese ? '类型与地址' : 'Types and Addresses', link: link('api/types') },
+                    { text: chinese ? '错误' : 'Errors', link: link('api/errors') },
+                    { text: chinese ? '数值编解码' : 'Value Codecs', link: link('api/codec') },
+                    { text: chinese ? '标签' : 'Tags', link: link('api/tags') },
+                    { text: chinese ? 'DB 快照' : 'DB Snapshots', link: link('api/db') },
+                    { text: chinese ? '连接池、策略与事件' : 'Pools, Policies and Events', link: link('api/optimization') },
+                    { text: chinese ? '诊断与块模型' : 'Diagnostics and Blocks', link: link('api/diagnostics') },
+                ],
+            },
+            {
+                text: chinese ? '可选产品 API' : 'Optional Product APIs',
+                collapsed: true,
+                items: [
+                    { text: chinese ? '仿真器' : 'Server', link: link('api/server') },
+                    { text: chinese ? 'Partner' : 'Partner', link: link('api/partner') },
+                    { text: chinese ? 'LOGO!' : 'LOGO!', link: link('api/logo') },
+                    { text: chinese ? 'PPI' : 'PPI', link: link('api/ppi') },
+                    { text: chinese ? '设备发现' : 'Discovery', link: link('api/discovery') },
+                    { text: chinese ? '主机指标 Demo' : 'Demo', link: link('api/demo') },
                 ],
             },
         ],

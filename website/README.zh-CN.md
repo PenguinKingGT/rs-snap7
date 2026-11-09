@@ -75,3 +75,10 @@ DOCS_BASE=/rs-snap7/ npm run docs:preview
 - 配置说明与代码注释使用英文。
 - 内部链接失效会导致生产构建失败，不要关闭检查。
 - 提交 package-lock.json，使用 `npm ci` 保证依赖安装可复现。
+
+## 文档参考
+
+教程与 API 分类参考 [python-snap7 官方文档](https://python-snap7.readthedocs.io/en/latest/)
+按任务组织的方式。示例与接口以当前 Rust 实现为准，上游硬件结果与 Python 专属行为
+不作为 Rust 版本的验收结论。每个教程/API 页面都有对应的英文路径；
+分类参考链接到生成的 Rustdoc，浏览器检查覆盖双语页面一致性与 API 链接目标。
