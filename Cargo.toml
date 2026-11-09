@@ -2,10 +2,35 @@
 name = "rs-snap7"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.95"
 description = "A Rust port of python-snap7 for Siemens S7 PLC communication"
 readme = "README.md"
 license = "MIT"
-publish = false
+repository = "https://github.com/PenguinKingGT/rs-snap7"
+homepage = "https://github.com/PenguinKingGT/rs-snap7"
+documentation = "https://docs.rs/rs-snap7"
+keywords = ["s7", "snap7", "siemens", "plc", "industrial"]
+categories = ["network-programming", "asynchronous"]
+publish = ["crates-io"]
+include = [
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/src/**",
+    "/examples/**",
+    "/tests/**",
+    "/tools/python_peer.py",
+    "/docs/**",
+    "/README.md",
+    "/README.zh-CN.md",
+    "/LICENSE",
+    "/NOTICE",
+    "/CHANGELOG.md",
+    "/RELEASING.md",
+]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"], optional = true }

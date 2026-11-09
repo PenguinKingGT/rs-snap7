@@ -1,7 +1,8 @@
 # Optional Dependencies
 
-The default library has no third-party runtime dependencies. Cargo.lock pins
-versions for this repository. Source reuse attribution remains in LICENSE/NOTICE.
+The default async client depends on Tokio. Optional products add the dependencies
+below. Rust 1.95 or newer is required for all features. Cargo.lock pins versions
+for repository and release checks. Source reuse attribution remains in LICENSE/NOTICE.
 
 | Dependency | Feature | Declared SPDX/license expression |
 | --- | --- | --- |
@@ -22,5 +23,5 @@ source files have been modified or vendored here. serialport uses the library
 under its MPL-2.0 terms; libudev defaults are disabled. sysinfo enables only
 system, disk, network and component features used by the demo.
 
-See docs/usage.md for supported platforms and runtime requirements. Building an
+See [usage.md](usage.md) for supported platforms and runtime requirements. Building an
 optional adapter does not constitute live hardware or network acceptance.

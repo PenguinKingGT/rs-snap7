@@ -2,8 +2,8 @@
 
 ## Try the local emulator
 
-Clone the repository and install a Rust toolchain supporting the 2024 edition.
-All-feature/demo builds require Rust 1.95 or newer. Run these commands from the
+Clone the repository and install Rust 1.95 or newer, the supported minimum
+for every Cargo feature. Run these commands from the
 repository root; no PLC hardware is required.
 
 ```sh

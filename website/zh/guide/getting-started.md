@@ -2,8 +2,7 @@
 
 ## 体验本地仿真器
 
-克隆仓库，安装支持 Rust 2024 edition 的工具链。
-启用全部特性或 demo 需要 Rust 1.95 及以上。在仓库根目录执行以下命令，无需 PLC 硬件：
+克隆仓库，安装 Rust 1.95 及以上工具链，所有 Cargo 特性均采用这一最低版本。在仓库根目录执行以下命令，无需 PLC 硬件：
 
 ```sh
 git clone https://github.com/PenguinKingGT/rs-snap7.git

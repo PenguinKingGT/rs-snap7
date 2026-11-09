@@ -14,7 +14,7 @@ operations, DB helpers, multi-variable reads/writes, recovery, limits, events, a
 diagnostic/control services, and block catalog/upload/download operations. Hardware validation is
 still pending; consult compatibility notes for explicit scope limits. The package is named `rs-snap7`, its Rust crate name is
 `rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
-attribution. Publishing is currently disabled.
+attribution. Version `0.1.0` is prepared for its first crates.io release; upload is still pending.
 
 ## Project Structure
 
@@ -28,9 +28,9 @@ and runnable examples in `examples/`.
 
 ## Local Development
 
-Install a toolchain supporting the Rust 2024 edition, including the `rustfmt` and
-`clippy` components. All-feature/demo builds require Rust 1.95 or newer because
-of sysinfo; local validation uses Rust 1.97.1. Run these commands from the repository root:
+Install Rust 1.95 or newer, including the `rustfmt` and `clippy` components.
+The minimum Rust version applies to all Cargo features; routine local validation
+uses Rust 1.97.1. Run these commands from the repository root:
 
 ```sh
 cargo build
@@ -108,3 +108,12 @@ Enable `ppi` for experimental S7-200 single-master serial access (8E1): checked 
 Enable `discovery` for independent PROFINET DCP Identify-All/directed Identify with bounded collection, deduplication and device metadata. The built-in raw Ethernet adapter targets Linux/macOS; other systems can provide `FrameIo`.
 
 Enable `cli` to build the `s7` binary (read/write/dump/info/server/discover); add `demo` for live host metrics in read-only DB1 and writable controls in DB2. See [usage and examples](docs/usage.md).
+
+## Versions and Releases
+
+The initial development version is `0.1.0`. Public APIs may change in subsequent
+`0.x` minor releases. Until upload, use Git or local path dependencies; crates.io
+is the source of truth for available releases. See [CHANGELOG.md](CHANGELOG.md)
+for scope and [RELEASING.md](RELEASING.md) for package contents, validation, and
+manual publishing. The crate contains source, examples, tests, licenses, and
+documentation; it excludes the website, Node dependencies, and local Python checkout.

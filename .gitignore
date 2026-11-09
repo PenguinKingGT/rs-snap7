@@ -2,3 +2,6 @@
 # Local upstream reference; excluded from this repository.
 /python-snap7/
 .DS_Store
+
+# Bytecode from local release-tool tests.
+/tools/**/__pycache__/

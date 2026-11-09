@@ -54,3 +54,28 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install stable --profile minimal
       - run: cargo +stable check --locked --all-targets --no-default-features --features "${{ matrix.feature }}"
+
+  minimum-rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - run: cargo +1.95.0 check --locked --all-targets --all-features
+
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install stable --profile minimal
+      - run: python3 -m unittest discover -s tools/tests
+      - run: cargo +stable package --locked --all-features
+      - run: python3 tools/check_release_package.py target/package/rs-snap7-0.1.0.crate
+      - run: cargo +stable publish --dry-run --locked --all-features
+      - run: cargo +stable test --locked --manifest-path target/package/rs-snap7-0.1.0/Cargo.toml --all-targets --all-features
+      - run: cargo +stable test --locked --manifest-path target/package/rs-snap7-0.1.0/Cargo.toml --doc --all-features
