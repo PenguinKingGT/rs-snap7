@@ -11,7 +11,7 @@
 [python-snap7](https://github.com/gijzelaerr/python-snap7)。默认使用原生 Tokio I/O，
 也可按需启用复用同一执行核心的同步封装。
 
-[使用指南](website/zh/guide/getting-started.md) · [API 参考](https://docs.rs/rs-snap7) · [示例](examples) · [变更记录](CHANGELOG.md)
+[使用指南](https://penguinkinggt.github.io/rs-snap7/zh/guide/getting-started.html) · [API 参考](https://docs.rs/rs-snap7) · [示例](examples) · [变更记录](CHANGELOG.md)
 
 ## 安装
 
@@ -60,7 +60,7 @@ s7 read --port 1102 DB1:0:INT
 ```
 
 读取命令和 Rust 示例都会输出 `-42`。使用 Ctrl-C 停止仿真器。
-在应用中嵌入仿真器的方法见[服务器教程](website/zh/guide/server.md)。
+在应用中嵌入仿真器的方法见[服务器教程](https://penguinkinggt.github.io/rs-snap7/zh/guide/server.html)。
 
 ## 主要能力
 
@@ -94,7 +94,7 @@ fn main() -> Result<()> {
 同步客户端共用一个后台运行时，应从未进入 Tokio 运行时的普通线程调用。
 在 Tokio 上下文中嵌套使用，包括 `spawn_blocking`，会返回 `Error::BlockingInAsyncContext`。
 Tokio 应用应使用异步接口。生命周期、回调、连接池和 DB 辅助操作参见
-[异步与同步](website/zh/guide/async-and-blocking.md)。
+[异步与同步](https://penguinkinggt.github.io/rs-snap7/zh/guide/async-and-blocking.html)。
 
 ## Cargo 特性
 
@@ -119,12 +119,12 @@ Tokio 应用应使用异步接口。生命周期、回调、连接池和 DB 辅�
 
 真实 PLC、串口 PPI 和 DCP 网络验收仍待执行。
 具体服务能否使用取决于 CPU 型号、固件和访问设置，接入前请阅读
-[PLC 连接指南](website/zh/guide/plc-connections.md)和
-[TIA Portal 配置](website/zh/guide/tia-portal.md)。
+[PLC 连接指南](https://penguinkinggt.github.io/rs-snap7/zh/guide/plc-connections.html)和
+[TIA Portal 配置](https://penguinkinggt.github.io/rs-snap7/zh/guide/tia-portal.html)。
 
 克隆共享串行会话，并行 I/O 需要独立连接。取消已发送的交换会关闭连接。
 写入/控制操作可能具有不确定的远端结果，重试前应检查结构化错误。
-详见[兼容性说明](docs/compatibility.md)与[故障排查](website/zh/guide/troubleshooting.md)。
+详见[兼容性说明](docs/compatibility.md)与[故障排查](https://penguinkinggt.github.io/rs-snap7/zh/guide/troubleshooting.html)。
 
 ## 参与开发
 

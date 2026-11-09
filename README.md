@@ -11,7 +11,7 @@ An async-first Rust library for classic Siemens S7 communication, ported from
 [python-snap7](https://github.com/gijzelaerr/python-snap7). Use native Tokio I/O
 by default, or enable a blocking facade over the same execution core.
 
-[User guide](website/guide/getting-started.md) · [API reference](https://docs.rs/rs-snap7) · [Examples](examples) · [Changelog](CHANGELOG.md)
+[User guide](https://penguinkinggt.github.io/rs-snap7/guide/getting-started.html) · [API reference](https://docs.rs/rs-snap7) · [Examples](examples) · [Changelog](CHANGELOG.md)
 
 ## Install
 
@@ -60,7 +60,7 @@ s7 read --port 1102 DB1:0:INT
 ```
 
 The read command and Rust example print `-42`. Stop the emulator with Ctrl-C.
-See the [server tutorial](website/guide/server.md) for embedding it in an application.
+See the [server tutorial](https://penguinkinggt.github.io/rs-snap7/guide/server.html) for embedding it in an application.
 
 ## Capabilities
 
@@ -94,7 +94,7 @@ fn main() -> Result<()> {
 Blocking clients share one background runtime. Call them from ordinary threads
 outside any entered Tokio runtime; nested use, including `spawn_blocking`, returns
 `Error::BlockingInAsyncContext`. Use the async API inside Tokio applications.
-See [async and blocking](website/guide/async-and-blocking.md) for lifecycle,
+See [async and blocking](https://penguinkinggt.github.io/rs-snap7/guide/async-and-blocking.html) for lifecycle,
 callback, pool, and DB-helper behavior.
 
 ## Cargo features
@@ -122,14 +122,14 @@ execute PLC programs.
 
 Physical PLC, serial PPI, and live DCP acceptance remain pending. Individual CPU
 services depend on model, firmware, and access settings. Start with the
-[PLC connection guide](website/guide/plc-connections.md) and
-[TIA Portal setup](website/guide/tia-portal.md).
+[PLC connection guide](https://penguinkinggt.github.io/rs-snap7/guide/plc-connections.html) and
+[TIA Portal setup](https://penguinkinggt.github.io/rs-snap7/guide/tia-portal.html).
 
 Clones share a serialized session; use independent connections for parallel I/O.
 Cancelling a transmitted exchange closes its socket. A write/control operation
 can have an uncertain remote outcome, so inspect structured errors before retrying.
 See [compatibility notes](docs/compatibility.md) and
-[troubleshooting](website/guide/troubleshooting.md).
+[troubleshooting](https://penguinkinggt.github.io/rs-snap7/guide/troubleshooting.html).
 
 ## Contributing
 
