@@ -66,6 +66,18 @@ DOCS_BASE=/rs-snap7/ npm run docs:preview
 这些命令不会修改托管账号或仓库的 Pages 设置。
 托管配置参见 [VitePress 官方部署指南](https://vitepress.dev/guide/deploy)。
 
+## GitHub Pages 部署
+
+[Documentation site](../.github/workflows/docs.yml) 在相关文件推送至 `main`、
+创建拉取请求及手动触发时构建，依次生成 Rustdoc、构建 VitePress 和运行浏览器检查。
+拉取请求只验证，`main` 的推送或手动运行会上传并部署 `.vitepress/dist/`。
+
+Pages 使用 GitHub Actions 作为发布来源。工作流从 Pages 元数据获取 `DOCS_BASE`，
+兼容仓库子路径与自定义域名。项目地址为 https://penguinkinggt.github.io/rs-snap7/，
+中文版位于 `/rs-snap7/zh/`。Node 依赖和 Rust 源码仅参与构建，线上只部署静态产物。
+需要重新构建时，可在仓库 Actions 中手动运行 **Documentation site**。
+工作流使用内置令牌，无需额外配置仓库发布密钥。
+
 ## 维护内容
 
 - 英文教程位于 `guide/`，中文教程位于 `zh/guide/`。

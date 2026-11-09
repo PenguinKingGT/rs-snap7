@@ -73,6 +73,20 @@ No hosting account or repository Pages settings are changed by these commands.
 See the official [VitePress deployment guide](https://vitepress.dev/guide/deploy)
 for hosting configuration.
 
+## GitHub Pages deployment
+
+[Documentation site](../.github/workflows/docs.yml) builds on relevant pushes to
+`main`, pull requests, and manual workflow runs. It generates Rustdoc, builds the
+VitePress site, and runs browser checks before deployment. Pull requests validate
+without publishing; pushes/manual runs on `main` upload only `.vitepress/dist/`.
+
+Pages uses the GitHub Actions source. The workflow obtains `DOCS_BASE` from Pages
+metadata, supporting the repository path and custom domains. The project site is
+https://penguinkinggt.github.io/rs-snap7/ with Chinese at `/rs-snap7/zh/`.
+Node dependencies and Rust source are build inputs; only static output is deployed.
+To rebuild manually, run **Documentation site** in the repository's Actions tab.
+The workflow uses the built-in token and requires no repository publishing secret.
+
 ## Maintain content
 
 - English tutorials: `guide/`; Chinese tutorials: `zh/guide/`.
