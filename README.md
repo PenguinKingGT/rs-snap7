@@ -1,60 +1,41 @@
 # rs-snap7
 
+[![crates.io](https://img.shields.io/crates/v/rs-snap7.svg)](https://crates.io/crates/rs-snap7)
+[![API documentation](https://docs.rs/rs-snap7/badge.svg)](https://docs.rs/rs-snap7)
+[![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange.svg)](Cargo.toml)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 English | [简体中文](README.zh-CN.md)
 
-A Rust port of `python-snap7` for Siemens S7 PLC communication.
+An async-first Rust library for classic Siemens S7 communication, ported from
+[python-snap7](https://github.com/gijzelaerr/python-snap7). Use native Tokio I/O
+by default, or enable a blocking facade over the same execution core.
 
-See the [migration tracker](docs/migration.md) for the 28 implemented baseline features and progress.
-The [architecture design](docs/architecture.md) describes module responsibilities
-and implementation rules. See the [validation guide](docs/testing.md) for test
-coverage and remaining acceptance work.
+[User guide](website/guide/getting-started.md) · [API reference](https://docs.rs/rs-snap7) · [Examples](examples) · [Changelog](CHANGELOG.md)
 
-The default asynchronous client and optional blocking adapters support classic S7 connections, raw and typed memory
-operations, DB helpers, multi-variable reads/writes, recovery, limits, events, and PLC
-diagnostic/control services, and block catalog/upload/download operations. Hardware validation is
-still pending; consult compatibility notes for explicit scope limits. The package is named `rs-snap7`, its Rust crate name is
-`rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
-attribution. Version [`0.1.0`](https://crates.io/crates/rs-snap7/0.1.0) is available on crates.io.
+## Install
 
-## Project Structure
+Requires **Rust 1.95+**. Add the library and a Tokio runtime to your application:
 
-- `src/lib.rs`: Rust library entry point.
-- `python-snap7/`: local Python reference implementation, documentation, and tests;
-  excluded from this repository's Git tracking.
-- `AGENTS.md`: contributor and code quality guidelines.
-
-Modules are organized by responsibility. Integration tests live in `tests/`
-and runnable examples in `examples/`.
-
-## Local Development
-
-Install Rust 1.95 or newer, including the `rustfmt` and `clippy` components.
-The minimum Rust version applies to all Cargo features; routine local validation
-uses Rust 1.97.1. Run these commands from the repository root:
-
-```sh
-cargo build
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets
-cargo test --doc
+```toml
+[dependencies]
+rs-snap7 = "0.1.0"
+tokio = { version = "1", features = ["macros", "rt", "net", "time"] }
 ```
 
-Add normal, boundary, and error-path tests with each feature. Default tests must run without PLC
-hardware; bug fixes must include regression tests. Document public interfaces and
-explain complex logic, following `AGENTS.md`.
+The Cargo package is `rs-snap7`; Rust imports use `rs_snap7`.
 
-Write comments and `AGENTS.md` in English. Keep the default README in English and
-update the Chinese translation alongside it.
+## Quick start
 
-## Async Client Example
+This example reads a signed 16-bit integer from DB1 at byte offset 0. It targets
+the local emulator below; use your controller's endpoint, rack, and slot for hardware.
 
-```rust,no_run
-use rs_snap7::{Client, ClientConfig};
+```rust
+use rs_snap7::{Client, ClientConfig, Result};
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> rs_snap7::Result<()> {
-    let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
+async fn main() -> Result<()> {
+    let endpoint = "127.0.0.1:1102".parse().expect("valid endpoint");
     let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
     let value = client.db_read_int(1, 0).await?;
     println!("DB1.DBW0 = {value}");
@@ -62,58 +43,114 @@ async fn main() -> rs_snap7::Result<()> {
 }
 ```
 
-See [compatibility notes](docs/compatibility.md) for deliberate interface changes.
+### Try without a PLC
 
-## Optional Blocking Access
+Install the optional CLI and start an emulator with DB1:
 
-`Client`, `ClientPool`, and `Logo` use the native Tokio core by default, requiring
-I/O and timers. Enable `blocking` for `rs_snap7::blocking::{Client, ClientPool, Logo}`.
-Calls omit `.await` and share configuration/result types and the same protocol implementation.
+```sh
+cargo install rs-snap7 --version 0.1.0 --features cli --locked
+s7 server --bind 127.0.0.1:1102
+```
+
+Leave it running. In another terminal, write and read a value:
+
+```sh
+s7 write --port 1102 DB1:0:INT -42
+s7 read --port 1102 DB1:0:INT
+```
+
+The read command and Rust example print `-42`. Stop the emulator with Ctrl-C.
+See the [server tutorial](website/guide/server.md) for embedding it in an application.
+
+## Capabilities
+
+- Raw DB/area access, typed scalars and arrays, strings, and bit-preserving updates.
+- Multi-variable reads/writes, read planning, and pools of independent connections.
+- PLC diagnostics, SZLs, CPU/clock services, block transfers, and session passwords.
+- PLC4X/nodeS7 tags, DB layouts, owned snapshots, and selective dirty-range writes.
+- Configurable timeouts, bounded read recovery, heartbeat, request limits, and hooks.
+- Optional emulator, LOGO!, Partner/PBC, serial PPI, DCP discovery, and CLI/demo tools.
+
+## Blocking access
+
+For synchronous applications, enable `blocking`:
 
 ```toml
 [dependencies]
 rs-snap7 = { version = "0.1.0", features = ["blocking"] }
 ```
 
-Call blocking methods from ordinary threads outside any entered Tokio runtime.
-Tokio tasks, entered handles, and `spawn_blocking` contexts return
-`Error::BlockingInAsyncContext`. All blocking clients share one background runtime
-worker; heartbeats advance while callers are idle. Final clone drop releases the
-connection/tasks; the shared runtime remains until process exit.
-Blocking `is_connected()` returns `Result<bool>`.
+```rust
+use rs_snap7::{blocking::Client, ClientConfig, Result};
 
-Foreground callbacks run on the calling thread after leaving the runtime and
-session locks, allowing metadata reentry. Background callbacks use an ordinary
-thread and a bounded queue (1024); overflow drops incoming events and increments
-`operation_stats().background_hook_events_dropped`. Keep callbacks short.
-DB async row/field methods are `read_row`, `write_row`, `read_fields`, `write_fields`;
-blocking calls use their `*_blocking` counterparts.
+fn main() -> Result<()> {
+    let endpoint = "127.0.0.1:1102".parse().expect("valid endpoint");
+    let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?)?;
+    println!("DB1.DBW0 = {}", client.db_read_int(1, 0)?);
+    client.disconnect()
+}
+```
 
-Cancelling a transmitted async operation invalidates its connection. A cancelled
-write may already have executed on the PLC; reconnect explicitly before further work.
-See `examples/read_db.rs` and `examples/blocking_read.rs`.
+Blocking clients share one background runtime. Call them from ordinary threads
+outside any entered Tokio runtime; nested use, including `spawn_blocking`, returns
+`Error::BlockingInAsyncContext`. Use the async API inside Tokio applications.
+See [async and blocking](website/guide/async-and-blocking.md) for lifecycle,
+callback, pool, and DB-helper behavior.
 
-## Data Tools and Optional Products
+## Cargo features
 
-Typed tags support PLC4X/nodeS7 parsing, checked values and sync/async I/O. Enable `tag-import` for CSV/JSON/TIA XML text imports; symbolic metadata does not enable symbolic PLC access.
+Async S7 access, codecs, tags, DB tools, and async LOGO! require no optional feature.
+Features are additive:
 
-DB tools provide validated layouts, owned row snapshots, field lookup/export and dirty-byte tracking. Row/field reads and selective writes support both clients; explicit row gaps and read-only prefixes are preserved.
+| Feature | Adds |
+| --- | --- |
+| `blocking` | Synchronous client, read pool, and LOGO! adapters |
+| `tag-import` | CSV, JSON, and TIA XML metadata imports |
+| `server` | Local S7 emulator with registered memory and service simulation |
+| `partner` | Active/passive Partner/PBC sessions; async adapters use the blocking pool |
+| `ppi` | Experimental S7-200 single-master serial access (8E1) |
+| `discovery` | PROFINET DCP; built-in raw Ethernet on Linux/macOS |
+| `cli` | `s7` read/write/dump/info/server/discover commands; enables server/discovery |
+| `demo` | Host metrics in read-only DB1 and writable controls in DB2 |
 
-Enable `server` for a bounded S7 emulator with registered/lockable memory, independent sessions, memory/block/clock/control services, configurable SZLs and event callbacks. It simulates protocol behavior; it does not execute PLC programs.
+## Scope and status
 
-Enable `partner` for active/passive bidirectional PBC transfers with R-IDs, ACK correlation, bounded queues, callbacks and statistics. `send_async`/`receive_async` adapters use Tokio’s blocking pool; cancellation detaches an already started operation.
+`0.1.0` is the first development release; APIs may change in later `0.x` minor
+versions. Classic S7 absolute addressing is supported; S7CommPlus and symbolic PLC
+I/O are outside the current scope. The emulator simulates services and does not
+execute PLC programs.
 
-Enable `ppi` for experimental S7-200 single-master serial access (8E1): checked SD1/SD2/SD3 frames, bounded read retries, S7 negotiation and V/area reads/writes. Serial tests use injected ports and require no hardware.
+Physical PLC, serial PPI, and live DCP acceptance remain pending. Individual CPU
+services depend on model, firmware, and access settings. Start with the
+[PLC connection guide](website/guide/plc-connections.md) and
+[TIA Portal setup](website/guide/tia-portal.md).
 
-Enable `discovery` for independent PROFINET DCP Identify-All/directed Identify with bounded collection, deduplication and device metadata. The built-in raw Ethernet adapter targets Linux/macOS; other systems can provide `FrameIo`.
+Clones share a serialized session; use independent connections for parallel I/O.
+Cancelling a transmitted exchange closes its socket. A write/control operation
+can have an uncertain remote outcome, so inspect structured errors before retrying.
+See [compatibility notes](docs/compatibility.md) and
+[troubleshooting](website/guide/troubleshooting.md).
 
-Enable `cli` to build the `s7` binary (read/write/dump/info/server/discover); add `demo` for live host metrics in read-only DB1 and writable controls in DB2. See [usage and examples](docs/usage.md).
+## Contributing
 
-## Versions and Releases
+Clone the repository and run:
 
-The initial development version is `0.1.0`. Public APIs may change in subsequent
-`0.x` minor releases. Install the published crate with `cargo add rs-snap7@0.1.0`,
-or use `rs-snap7 = "0.1.0"` in Cargo.toml. See [CHANGELOG.md](CHANGELOG.md)
-for scope and [RELEASING.md](RELEASING.md) for package contents, validation, and
-manual publishing. The crate contains source, examples, tests, licenses, and
-documentation; it excludes the website, Node dependencies, and local Python checkout.
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+cargo test --doc --all-features
+```
+
+Default software tests use local peers and need no PLC. Hardware/Python acceptance
+is explicitly opt-in. Follow [AGENTS.md](AGENTS.md); see the
+[validation guide](docs/testing.md), [migration tracker](docs/migration.md), and
+[architecture](docs/architecture.md) for contributor details.
+The local `python-snap7/` reference is excluded from Git. The standalone
+[bilingual documentation site](website/README.md) has its own Node dependencies.
+
+## License
+
+MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for upstream attribution.
+Release scope is recorded in [CHANGELOG.md](CHANGELOG.md); maintainer publishing
+instructions are in [RELEASING.md](RELEASING.md).

@@ -1,55 +1,41 @@
 # rs-snap7
 
+[![crates.io](https://img.shields.io/crates/v/rs-snap7.svg)](https://crates.io/crates/rs-snap7)
+[![API documentation](https://docs.rs/rs-snap7/badge.svg)](https://docs.rs/rs-snap7)
+[![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange.svg)](Cargo.toml)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 [English](README.md) | 简体中文
 
-将 `python-snap7` 迁移为 Rust 库，用于 Siemens S7 PLC 通信。
+以异步为核心的经典 Siemens S7 通信 Rust 库，迁移自
+[python-snap7](https://github.com/gijzelaerr/python-snap7)。默认使用原生 Tokio I/O，
+也可按需启用复用同一执行核心的同步封装。
 
-已实现的 28 项基线功能及进度见[迁移清单](docs/migration.md)。
-模块职责与实现约定见[架构设计](docs/architecture.md)。
-测试范围与剩余验收工作见[验证指南](docs/testing.md)。
+[使用指南](website/zh/guide/getting-started.md) · [API 参考](https://docs.rs/rs-snap7) · [示例](examples) · [变更记录](CHANGELOG.md)
 
-默认异步客户端及可选同步封装已支持经典 S7 连接、原始及类型化内存读写、DB 辅助操作、多变量批量读写、连接恢复、限流、操作事件、PLC 诊断及控制，以及块目录、上传和下载。
-尚未验证真实 PLC，范围限制见兼容性说明。包名为
-`rs-snap7`，Rust 代码中的 crate 名为 `rs_snap7`，采用 Rust 2024 edition。
-项目使用 MIT 许可证；上游署名见 `LICENSE` 与 `NOTICE`。[`0.1.0`](https://crates.io/crates/rs-snap7/0.1.0) 已发布到 crates.io。
+## 安装
 
-## 项目结构
+需要 **Rust 1.95+**。在应用中添加库和 Tokio 运行时：
 
-- `src/lib.rs`：Rust 库入口。
-- `python-snap7/`：本地 Python 参考实现、文档与测试，不纳入当前仓库的 Git 管理。
-- `AGENTS.md`：贡献与代码质量规范。
-
-模块按职责组织，集成测试放在 `tests/`，可运行示例放在
-`examples/`。
-
-## 本地开发
-
-安装 Rust 1.95 及以上工具链，以及 `rustfmt` 和 `clippy` 组件。
-最低 Rust 版本适用于所有 Cargo 特性，本地常规验证使用 Rust 1.97.1。
-在仓库根目录执行：
-
-```sh
-cargo build
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets
-cargo test --doc
+```toml
+[dependencies]
+rs-snap7 = "0.1.0"
+tokio = { version = "1", features = ["macros", "rt", "net", "time"] }
 ```
 
-新增功能须同步添加正常、边界及错误路径测试，
-默认测试不依赖真实 PLC；修复缺陷须添加回归测试。公开接口需有文档注释，
-复杂逻辑需解释设计原因，遵循 `AGENTS.md` 中的规范。
+Cargo 包名为 `rs-snap7`，Rust 导入时使用 `rs_snap7`。
 
-注释和 `AGENTS.md` 使用英文。默认 README 使用英文，中文版与英文版同步更新。
+## 快速开始
 
-## 异步客户端示例
+示例读取 DB1 字节偏移 0 处的 16 位有符号整数，连接下文的本地仿真器。
+使用硬件时，请替换为控制器实际的地址、机架号和槽号。
 
-```rust,no_run
-use rs_snap7::{Client, ClientConfig};
+```rust
+use rs_snap7::{Client, ClientConfig, Result};
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> rs_snap7::Result<()> {
-    let endpoint = "192.168.1.10:102".parse().expect("valid PLC endpoint");
+async fn main() -> Result<()> {
+    let endpoint = "127.0.0.1:1102".parse().expect("valid endpoint");
     let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?).await?;
     let value = client.db_read_int(1, 0).await?;
     println!("DB1.DBW0 = {value}");
@@ -57,53 +43,107 @@ async fn main() -> rs_snap7::Result<()> {
 }
 ```
 
-有意调整的接口和行为见[兼容性说明](docs/compatibility.md)。
+### 无需 PLC 即可体验
 
-## 可选同步接口
+安装可选 CLI，启动包含 DB1 的仿真器：
 
-`Client`、`ClientPool` 和 `Logo` 默认使用 Tokio 异步核心，需要开启 I/O 和计时器。
-启用 `blocking` 后可使用 `rs_snap7::blocking::{Client, ClientPool, Logo}`；
-方法调用无需 `.await`，配置和结果类型保持一致，不维护第二套协议实现。
+```sh
+cargo install rs-snap7 --version 0.1.0 --features cli --locked
+s7 server --bind 127.0.0.1:1102
+```
+
+保持服务运行，在另一个终端写入并读取数值：
+
+```sh
+s7 write --port 1102 DB1:0:INT -42
+s7 read --port 1102 DB1:0:INT
+```
+
+读取命令和 Rust 示例都会输出 `-42`。使用 Ctrl-C 停止仿真器。
+在应用中嵌入仿真器的方法见[服务器教程](website/zh/guide/server.md)。
+
+## 主要能力
+
+- 原始 DB/区域访问、类型化标量与数组、字符串及保留相邻位的更新。
+- 多变量读写、读取规划和独立连接池。
+- PLC 诊断、SZL、CPU/时钟服务、块传输与会话密码。
+- PLC4X/nodeS7 标签、DB 布局、自有快照及按变更区间选择性写入。
+- 可配置超时、有界读取恢复、心跳、限流与事件回调。
+- 可选仿真器、LOGO!、Partner/PBC、串口 PPI、DCP 发现及 CLI/demo 工具。
+
+## 同步访问
+
+同步应用可以启用 `blocking`：
 
 ```toml
 [dependencies]
 rs-snap7 = { version = "0.1.0", features = ["blocking"] }
 ```
 
-同步调用必须在未进入 Tokio 运行时的普通线程中执行；在 Tokio 任务、手动进入的
-运行时上下文或 `spawn_blocking` 中会返回 `Error::BlockingInAsyncContext`。
-所有同步客户端共享一个后台运行时线程，空闲时心跳仍继续执行；最后一个克隆释放连接
-与任务，共享运行时保留至进程退出。同步 `is_connected()` 返回 `Result<bool>`。
+```rust
+use rs_snap7::{blocking::Client, ClientConfig, Result};
 
-同步前台操作的回调在调用线程退出运行时及连接锁后执行，可重入元数据查询。
-后台回调使用有界队列（1024）和普通线程；队列满时丢弃新事件，计入
-`operation_stats().background_hook_events_dropped`。回调应尽快返回。
-DB 的异步行/字段操作使用 `read_row`、`write_row`、`read_fields`、`write_fields`；
-同步调用使用对应的 `*_blocking` 方法。
+fn main() -> Result<()> {
+    let endpoint = "127.0.0.1:1102".parse().expect("valid endpoint");
+    let client = Client::connect(ClientConfig::new(endpoint, 0, 1)?)?;
+    println!("DB1.DBW0 = {}", client.db_read_int(1, 0)?);
+    client.disconnect()
+}
+```
 
-取消已经发送的异步操作会使连接失效；被取消的写入可能已经在 PLC 上执行。
-后续操作前应显式重新连接。示例见 `examples/read_db.rs` 和 `examples/blocking_read.rs`。
+同步客户端共用一个后台运行时，应从未进入 Tokio 运行时的普通线程调用。
+在 Tokio 上下文中嵌套使用，包括 `spawn_blocking`，会返回 `Error::BlockingInAsyncContext`。
+Tokio 应用应使用异步接口。生命周期、回调、连接池和 DB 辅助操作参见
+[异步与同步](website/zh/guide/async-and-blocking.md)。
 
-## 数据工具与可选产品
+## Cargo 特性
 
-类型化标签支持 PLC4X/nodeS7 解析、数值校验和同步/异步读写。启用 `tag-import` 可导入 CSV/JSON/TIA XML 文本；符号元数据不代表支持符号 PLC 访问。
+异步 S7、编解码、标签、DB 工具及异步 LOGO! 无需额外特性，以下特性可叠加启用：
 
-DB 工具支持布局校验、行快照、字段查询/导出与变更字节跟踪。同步和异步客户端均支持行/字段读取及选择性写入，并保留行间隔和只读前缀。
+| 特性 | 新增能力 |
+| --- | --- |
+| `blocking` | 同步客户端、读取连接池与 LOGO! 适配器 |
+| `tag-import` | CSV、JSON 和 TIA XML 元数据导入 |
+| `server` | 注册内存、模拟协议服务的本地 S7 仿真器 |
+| `partner` | 主动/被动 Partner/PBC 会话；异步适配器使用阻塞线程池 |
+| `ppi` | 实验性 S7-200 单主串口访问（8E1） |
+| `discovery` | PROFINET DCP；内置原始以太网支持 Linux/macOS |
+| `cli` | `s7` 的 read/write/dump/info/server/discover 命令；启用 server/discovery |
+| `demo` | 只读 DB1 主机指标与 DB2 可写控制区 |
 
-启用 `server` 可使用有界 S7 仿真器：可注册/锁定内存、独立会话、内存/块/时钟/控制服务、自定义 SZL 和事件回调。它仿真协议行为，不执行 PLC 程序。
+## 范围与状态
 
-启用 `partner` 可使用主/被动双向 PBC 传输，包含 R-ID、ACK 关联、有界队列、回调与统计。其 `send_async`/`receive_async` 适配器使用 Tokio 阻塞线程池；取消等待不会终止已开始的操作。
+`0.1.0` 为首个开发版本，后续 `0.x` 次版本可能调整 API。
+当前支持经典 S7 绝对地址，S7CommPlus 和符号 PLC I/O 不在支持范围内。
+仿真器模拟协议服务，不执行 PLC 程序。
 
-启用 `ppi` 可使用实验性 S7-200 单主串口访问（8E1）：SD1/SD2/SD3 帧校验、有界读取重试、S7 协商以及 V/区域读写。串口测试使用注入端口，无需硬件。
+真实 PLC、串口 PPI 和 DCP 网络验收仍待执行。
+具体服务能否使用取决于 CPU 型号、固件和访问设置，接入前请阅读
+[PLC 连接指南](website/zh/guide/plc-connections.md)和
+[TIA Portal 配置](website/zh/guide/tia-portal.md)。
 
-启用 `discovery` 可使用独立 PROFINET DCP 全部发现/定向识别，包含有界收集、去重和设备元数据。内置原始以太网适配器面向 Linux/macOS；其他系统可提供 `FrameIo`。
+克隆共享串行会话，并行 I/O 需要独立连接。取消已发送的交换会关闭连接。
+写入/控制操作可能具有不确定的远端结果，重试前应检查结构化错误。
+详见[兼容性说明](docs/compatibility.md)与[故障排查](website/zh/guide/troubleshooting.md)。
 
-启用 `cli` 构建 `s7` 命令（read/write/dump/info/server/discover）；配合 `demo` 可将实时主机指标发布到只读 DB1，并提供可写控制区 DB2。参见[使用说明与示例](docs/usage.md)。
+## 参与开发
 
-## 版本与发布
+克隆仓库后执行：
 
-首次开发版本为 `0.1.0`，公开 API 可能在后续 `0.x` 次版本中调整。
-可运行 `cargo add rs-snap7@0.1.0`，或在 Cargo.toml 中添加 `rs-snap7 = "0.1.0"`。
-变更说明见 [CHANGELOG.md](CHANGELOG.md)，打包范围、验证与手动发布步骤见
-[RELEASING.md](RELEASING.md)。发布包包含源码、示例、测试、许可证与文档，
-不包含网站、Node 依赖或本地 Python 上游仓库。
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+cargo test --doc --all-features
+```
+
+常规软件测试使用本地对端，无需 PLC；硬件和 Python 验收需要显式启用。
+请遵循 [AGENTS.md](AGENTS.md)，贡献者资料见[验证指南](docs/testing.md)、
+[迁移清单](docs/migration.md)和[架构设计](docs/architecture.md)。
+本地 `python-snap7/` 参考目录不纳入 Git 管理。
+独立的[双语文档站](website/README.zh-CN.md)使用自己的 Node 依赖。
+
+## 许可证
+
+MIT。上游署名见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
+发布范围见 [CHANGELOG.md](CHANGELOG.md)，维护者发布步骤见 [RELEASING.md](RELEASING.md)。
