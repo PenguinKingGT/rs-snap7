@@ -26,7 +26,7 @@ features:
 ## 项目状态
 
 rs-snap7 是 python-snap7 的 Rust 迁移项目，28 项基线迁移功能均已实现。
-当前仍处于开发阶段，尚未发布到 crates.io。
+[`0.1.0`](https://crates.io/crates/rs-snap7/0.1.0) 已发布到 crates.io，仍处于开发阶段。
 真实 PLC、PPI 串口和 DCP 网络验收仍待执行。
 
 可以先使用[本地仿真器](guide/getting-started.md)体验，了解

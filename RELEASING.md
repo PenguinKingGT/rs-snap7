@@ -1,11 +1,19 @@
 # Release Procedure
 
-## Prepared release
+## Published release
 
-Version `0.1.0` is prepared for the first crates.io upload. No crate, Git tag,
-GitHub release, or documentation deployment is created by these instructions.
-The crate name was unregistered when checked on 2026-11-09; availability is not
-reserved and must be checked again immediately before the first upload.
+Version [`0.1.0`](https://crates.io/crates/rs-snap7/0.1.0) was published on
+2026-11-09 from commit `785d824ab19392cf98fbf7d34a846f11a7771ded`.
+The release tag is `v0.1.0`. crates.io accepted the upload and made it available
+in the registry. GitHub releases and documentation-site deployment are separate
+operations.
+
+Registry SHA-256: `357e89a4db472d9438a0808623b4ce4810ccb39929b61a7b5f8f6e8aab5ca5c5`.
+The downloaded registry archive passed payload validation, matched that checksum
+and the release commit, and a separate consumer application built and ran with
+`rs-snap7 = "=0.1.0"` from crates.io. docs.rs API availability was not yet
+confirmed during publication; check https://docs.rs/rs-snap7/0.1.0/ before
+announcing hosted API availability.
 
 Rust 1.95 is the supported minimum for every feature combination. This includes
 the optional `demo` dependency. The `0.1` release covers the implemented software
@@ -28,6 +36,9 @@ payload boundaries. Tests using Python or PLC hardware stay opt-in; the Python
 harness needs an external pinned upstream checkout and SNAP7_PYTHON_REFERENCE.
 
 ## Validate the candidate
+
+The examples below record the `0.1.0` procedure. For a subsequent release,
+update Cargo.toml, the changelog, and version-specific archive paths first.
 
 Run from a clean checkout of the intended release commit:
 

@@ -14,7 +14,7 @@ operations, DB helpers, multi-variable reads/writes, recovery, limits, events, a
 diagnostic/control services, and block catalog/upload/download operations. Hardware validation is
 still pending; consult compatibility notes for explicit scope limits. The package is named `rs-snap7`, its Rust crate name is
 `rs_snap7`, and it uses the Rust 2024 edition. The project uses the MIT license; see `LICENSE` and `NOTICE` for upstream
-attribution. Version `0.1.0` is prepared for its first crates.io release; upload is still pending.
+attribution. Version [`0.1.0`](https://crates.io/crates/rs-snap7/0.1.0) is available on crates.io.
 
 ## Project Structure
 
@@ -72,7 +72,7 @@ Calls omit `.await` and share configuration/result types and the same protocol i
 
 ```toml
 [dependencies]
-rs-snap7 = { path = ".", features = ["blocking"] }
+rs-snap7 = { version = "0.1.0", features = ["blocking"] }
 ```
 
 Call blocking methods from ordinary threads outside any entered Tokio runtime.
@@ -112,8 +112,8 @@ Enable `cli` to build the `s7` binary (read/write/dump/info/server/discover); ad
 ## Versions and Releases
 
 The initial development version is `0.1.0`. Public APIs may change in subsequent
-`0.x` minor releases. Until upload, use Git or local path dependencies; crates.io
-is the source of truth for available releases. See [CHANGELOG.md](CHANGELOG.md)
+`0.x` minor releases. Install the published crate with `cargo add rs-snap7@0.1.0`,
+or use `rs-snap7 = "0.1.0"` in Cargo.toml. See [CHANGELOG.md](CHANGELOG.md)
 for scope and [RELEASING.md](RELEASING.md) for package contents, validation, and
 manual publishing. The crate contains source, examples, tests, licenses, and
 documentation; it excludes the website, Node dependencies, and local Python checkout.

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0
+## 0.1.0 — 2026-11-09
 
 Initial development release of the Rust port of python-snap7 3.4.0.
 

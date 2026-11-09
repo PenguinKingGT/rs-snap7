@@ -3,7 +3,7 @@
 Status: **Implemented.** This document records the execution-model refactor
 and complements the current [architecture](architecture.md).
 It is informed by the [library research](rust-io-library-api-research.md).
-The project is unpublished, so the migration can make deliberate interface
+The project was unpublished during this refactor, allowing deliberate interface
 changes without keeping a permanent compatibility implementation.
 
 ## 1. Decision and Scope

@@ -51,6 +51,6 @@ continuing after cancellation and determine the remote outcome where necessary.
 - PPI, gateway routing, and some service layouts remain experimental or unverified
   against hardware. The emulator simulates protocol behavior, not PLC execution.
 
-The project is in development and is not published to crates.io. Real PLC, serial
+Version `0.1.0` is published on crates.io and remains a development release. Real PLC, serial
 PPI, and live DCP acceptance remain pending. No firmware/model support is implied
 by software-only tests.

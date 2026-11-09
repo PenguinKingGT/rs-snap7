@@ -14,7 +14,7 @@ import { withBase } from 'vitepress';
 <a :href="withBase('/rustdoc/rs_snap7/struct.ClientConfig.html')" target="_blank" rel="noopener">ClientConfig</a> ·
 <a :href="withBase('/rustdoc/rs_snap7/error/enum.Error.html')" target="_blank" rel="noopener">Error</a>
 
-crate 尚未发布。可以直接从仓库生成 Rustdoc，查看全部公开方法、类型、参数与错误约定：
+`0.1.0` 已发布。也可直接从仓库生成 Rustdoc，查看全部公开方法、类型、参数与错误约定：
 
 ```sh
 # Run from the repository root.

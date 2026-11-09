@@ -29,7 +29,7 @@ was lost or the future was cancelled. Inspect `AmbiguousWrite` and
 Enable the feature in your dependency declaration:
 
 ```toml
-rs-snap7 = { git = "https://github.com/PenguinKingGT/rs-snap7.git", features = ["blocking"] }
+rs-snap7 = { version = "0.1.0", features = ["blocking"] }
 ```
 
 Use the same configuration and result types with `rs_snap7::blocking`:

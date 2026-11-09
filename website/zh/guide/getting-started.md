@@ -22,12 +22,11 @@ cargo run --example read_db -- 127.0.0.1:1102 DB1:0:INT
 
 ## 添加依赖
 
-该 crate 尚未发布，可使用 Git 依赖或本地仓库路径。
-应用需要可复现构建时，应固定 Git 提交版本。
+从 crates.io 安装 `0.1.0`。需要使用尚未发布的仓库修改时，仍可采用 Git 或本地路径依赖。
 
 ```toml
 [dependencies]
-rs-snap7 = { git = "https://github.com/PenguinKingGT/rs-snap7.git" }
+rs-snap7 = "0.1.0"
 tokio = { version = "1", features = ["macros", "rt", "net", "time"] }
 ```
 

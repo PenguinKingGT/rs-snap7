@@ -24,12 +24,12 @@ The read commands print `-42`. Stop the emulator with Ctrl-C.
 
 ## Add the library
 
-The crate is not yet published. Use the Git repository, or a local path to your
-checkout. Pin a revision in applications that need reproducible builds.
+Install version `0.1.0` from crates.io. Git and local path dependencies remain
+available for working with an unreleased checkout.
 
 ```toml
 [dependencies]
-rs-snap7 = { git = "https://github.com/PenguinKingGT/rs-snap7.git" }
+rs-snap7 = "0.1.0"
 tokio = { version = "1", features = ["macros", "rt", "net", "time"] }
 ```
 

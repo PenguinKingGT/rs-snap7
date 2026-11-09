@@ -11,7 +11,7 @@
 默认异步客户端及可选同步封装已支持经典 S7 连接、原始及类型化内存读写、DB 辅助操作、多变量批量读写、连接恢复、限流、操作事件、PLC 诊断及控制，以及块目录、上传和下载。
 尚未验证真实 PLC，范围限制见兼容性说明。包名为
 `rs-snap7`，Rust 代码中的 crate 名为 `rs_snap7`，采用 Rust 2024 edition。
-项目使用 MIT 许可证；上游署名见 `LICENSE` 与 `NOTICE`。`0.1.0` 已准备进行首次 crates.io 发布，尚未上传。
+项目使用 MIT 许可证；上游署名见 `LICENSE` 与 `NOTICE`。[`0.1.0`](https://crates.io/crates/rs-snap7/0.1.0) 已发布到 crates.io。
 
 ## 项目结构
 
@@ -67,7 +67,7 @@ async fn main() -> rs_snap7::Result<()> {
 
 ```toml
 [dependencies]
-rs-snap7 = { path = ".", features = ["blocking"] }
+rs-snap7 = { version = "0.1.0", features = ["blocking"] }
 ```
 
 同步调用必须在未进入 Tokio 运行时的普通线程中执行；在 Tokio 任务、手动进入的
@@ -103,7 +103,7 @@ DB 工具支持布局校验、行快照、字段查询/导出与变更字节跟�
 ## 版本与发布
 
 首次开发版本为 `0.1.0`，公开 API 可能在后续 `0.x` 次版本中调整。
-上传前可使用 Git 或本地路径依赖；实际版本以 crates.io 为准。
+可运行 `cargo add rs-snap7@0.1.0`，或在 Cargo.toml 中添加 `rs-snap7 = "0.1.0"`。
 变更说明见 [CHANGELOG.md](CHANGELOG.md)，打包范围、验证与手动发布步骤见
 [RELEASING.md](RELEASING.md)。发布包包含源码、示例、测试、许可证与文档，
 不包含网站、Node 依赖或本地 Python 上游仓库。

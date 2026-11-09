@@ -14,7 +14,7 @@ method signatures, parameters, return values, errors, and source links.
 <a :href="withBase('/rustdoc/rs_snap7/struct.ClientConfig.html')" target="_blank" rel="noopener">ClientConfig</a> ·
 <a :href="withBase('/rustdoc/rs_snap7/error/enum.Error.html')" target="_blank" rel="noopener">Error</a>
 
-The crate is still unpublished. Generate Rustdoc directly from the checkout to
+Version `0.1.0` is published. Generate Rustdoc directly from the checkout to
 see every public method, type, parameter, and error contract:
 
 ```sh

@@ -26,7 +26,8 @@ features:
 ## Project status
 
 rs-snap7 is a Rust port of python-snap7. All 28 baseline migration features are
-implemented. The package is still in development and is not published to crates.io.
+implemented. Version [`0.1.0`](https://crates.io/crates/rs-snap7/0.1.0) is available
+on crates.io as a development release.
 Real PLC, serial PPI, and live DCP acceptance remain pending.
 
 Start with the [local emulator](guide/getting-started.md), choose

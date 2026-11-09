@@ -67,7 +67,7 @@ and failure behavior. No PLC hardware has been validated yet.
   Tokio contexts, including `spawn_blocking`, with `BlockingInAsyncContext`.
   Blocking readiness returns `Result<bool>`; async readiness returns `bool`.
   DB async method names have no `_async` suffix; synchronous adapters use
-  `_blocking`. The unpublished API retains no old aliases or `async` feature.
+  `_blocking`. The 0.1 API retains no old aliases or `async` feature.
   Dropping an in-flight transaction future closes its socket; cancellation during
   a write has an unknown remote outcome.
 

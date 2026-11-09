@@ -26,7 +26,7 @@ client.disconnect().await?;
 在依赖中启用特性：
 
 ```toml
-rs-snap7 = { git = "https://github.com/PenguinKingGT/rs-snap7.git", features = ["blocking"] }
+rs-snap7 = { version = "0.1.0", features = ["blocking"] }
 ```
 
 通过 `rs_snap7::blocking` 使用相同的配置与结果类型：
