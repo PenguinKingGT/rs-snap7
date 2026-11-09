@@ -80,6 +80,10 @@ export default defineConfig({
     title: 'rs-snap7',
     description: 'Async-first Siemens S7 communication in Rust.',
     base,
+    // Head asset URLs need the deployment prefix, including on nested locale pages.
+    head: [
+        ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
+    ],
     lastUpdated: true,
     srcExclude: ['README*.md'],
     // Keep .html links compatible with ordinary static file hosting and Pages.

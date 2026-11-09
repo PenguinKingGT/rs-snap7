@@ -107,3 +107,19 @@ test('categorized API links resolve to generated documentation', async ({ page, 
         expect(await response.text(), target).toContain('rustdoc');
     }
 });
+
+
+test('favicon resolves from the deployment base on both locale routes', async ({ page, request }) => {
+    for (const route of ['index.html', 'zh/api/index.html']) {
+        await page.goto(route);
+        const icon = page.locator('head link[rel="icon"]');
+        await expect(icon).toHaveCount(1);
+        await expect(icon).toHaveAttribute('type', 'image/svg+xml');
+        await expect(icon).toHaveAttribute('href', `${base}logo.svg`);
+        const href = await icon.getAttribute('href');
+        const response = await request.get(new URL(href!, page.url()).href);
+        expect(response.status()).toBe(200);
+        expect(response.headers()['content-type']).toContain('image/svg+xml');
+        expect(await response.text()).toContain('<svg');
+    }
+});
